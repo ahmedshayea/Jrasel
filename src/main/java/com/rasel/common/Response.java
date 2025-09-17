@@ -22,15 +22,11 @@ public interface Response {
 
     public void setData(String data);
 
-    public String getSenderId();
+    public boolean isOk();
 
-    public void setSenderId(String senderId);
+    public boolean isError();
 
-    public String getSenderName();
+    public boolean isForbidden();
 
-    public void setSenderName(String senderName);
-
-    public String getTimestamp();
-
-    public void setTimestamp(String timestamp);
+    public ResponseResource getResource();
 }

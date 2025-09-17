@@ -11,141 +11,164 @@ package com.rasel.common;
 
 enum RM {
     STATUS,
+    RESOURCE,
     DATA_TYPE,
     GROUP,
     DATA,
-    SENDER_ID,
-    SENDER_NAME,
-    TIMESTAMP,
 }
 
 public class ResponseBuilder implements Response {
+    /** Protocol terminator for responses (kept public for reuse by clients). */
+    public static final String END_OF_RESPONSE = "END_OF_RESPONSE";
 
     private ResponseStatus status;
+    private ResponseResource resource;
     private String group;
     private DataType dataType;
     private String data;
-    // Optional metadata
-    private String senderId;
-    private String senderName;
-    private String timestamp;
 
+    // Main constructor with all fields
+    public ResponseBuilder(String data, DataType dataType, String group, ResponseStatus status,
+            ResponseResource resource) {
+        this.data = data != null ? data : "";
+        this.dataType = dataType != null ? dataType : DataType.TEXT;
+        this.group = group;
+        this.status = status != null ? status : ResponseStatus.OK;
+        this.resource = resource;
+    }
+
+    // All possible constructor combinations
     public ResponseBuilder() {
-        this("");
+    this("", DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data) {
-        this(data, DataType.TEXT, null, ResponseStatus.OK);
+    this(data, DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data, DataType dataType) {
-        this(data, dataType, null, ResponseStatus.OK);
+    this(data, dataType, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data, DataType dataType, String group) {
-        this(data, dataType, group, ResponseStatus.OK);
+    this(data, dataType, group, ResponseStatus.OK, null);
     }
 
-    public ResponseBuilder(
-            String data,
-            DataType dataType,
-            String group,
-            ResponseStatus status) {
-        this.data = data;
-        this.dataType = dataType;
-        this.group = group;
-        this.status = status;
+    public ResponseBuilder(String data, DataType dataType, String group, ResponseStatus status) {
+    this(data, dataType, group, status, null);
     }
 
+    // no extra constructor; the above serves as the main one
+
+    // Static factories for OK
     public static ResponseBuilder ok(String data) {
-        return new ResponseBuilder(
-                data,
-                DataType.TEXT,
-                null,
-                ResponseStatus.OK);
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
-    public static ResponseBuilder ok(Object data) {
-        return new ResponseBuilder(
-                data.toString(),
-                DataType.TEXT,
-                null,
-                ResponseStatus.OK);
+    public static ResponseBuilder ok(String data, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, resource);
     }
 
     public static ResponseBuilder ok(String data, String group) {
-        return new ResponseBuilder(
-                data,
-                DataType.TEXT,
-                group,
-                ResponseStatus.OK);
+    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, null);
     }
 
-    public static ResponseBuilder ok(Object data, String group) {
-        return new ResponseBuilder(
-                data.toString(),
-                DataType.TEXT,
-                group,
-                ResponseStatus.OK);
+    public static ResponseBuilder ok(String data, String group, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, resource);
     }
 
-    public static ResponseBuilder okWithSender(String data, String group, String senderId, String senderName,
-            String timestamp) {
-        ResponseBuilder rb = ok(data, group);
-        rb.setSenderId(senderId);
-        rb.setSenderName(senderName);
-        rb.setTimestamp(timestamp);
-        return rb;
+    public static ResponseBuilder ok(String data, DataType dataType, String group, ResponseResource resource) {
+    return new ResponseBuilder(data, dataType, group, ResponseStatus.OK, resource);
     }
 
+    // Static factories for FORBIDDEN
     public static ResponseBuilder forbidden(String data) {
-        return new ResponseBuilder(
-                data,
-                DataType.TEXT,
-                null,
-                ResponseStatus.FORBIDDEN);
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, null);
     }
 
+    public static ResponseBuilder forbidden(String data, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, resource);
+    }
+
+    public static ResponseBuilder forbidden(String data, String group, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.FORBIDDEN, resource);
+    }
+
+    // Static factories for ERROR
     public static ResponseBuilder error(String data) {
-        return new ResponseBuilder(
-                data,
-                DataType.TEXT,
-                null,
-                ResponseStatus.ERROR);
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, null);
     }
 
-    /**
-     *
-     */
+    public static ResponseBuilder error(String data, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, resource);
+    }
+
+    public static ResponseBuilder error(String data, String group, ResponseResource resource) {
+    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.ERROR, resource);
+    }
+
+    // Convenience JSON factories
+    public static ResponseBuilder okJson(String json) {
+    return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.OK, null);
+    }
+
+    public static ResponseBuilder okJson(String json, String group) {
+    return new ResponseBuilder(json, DataType.JSON, group, ResponseStatus.OK, null);
+    }
+
+    public static ResponseBuilder errorJson(String json) {
+    return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.ERROR, null);
+    }
+
+    // Fluent builder-style API (non-breaking, returns this)
+    public static ResponseBuilder builder() {
+        return new ResponseBuilder();
+    }
+
+    public ResponseBuilder status(ResponseStatus status) {
+        this.status = status != null ? status : ResponseStatus.OK;
+        return this;
+    }
+
+    public ResponseBuilder resource(ResponseResource resource) {
+        this.resource = resource;
+        return this;
+    }
+
+    public ResponseBuilder group(String group) {
+        this.group = group;
+        return this;
+    }
+
+    public ResponseBuilder dataType(DataType dataType) {
+        this.dataType = dataType != null ? dataType : DataType.TEXT;
+        return this;
+    }
+
+    public ResponseBuilder data(String data) {
+        this.data = data != null ? data : "";
+        return this;
+    }
+
+    // Sender fields removed from protocol; include sender info inside DATA when needed (e.g., message payload JSON).
+
+    /** No-op for fluency; returns the same instance. */
+    public ResponseBuilder build() {
+        return this;
+    }
+
+    @Override
     public String getResponseString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(RM.STATUS.name() + ":").append(status.name()).append("\n");
-        sb
-                .append(RM.DATA_TYPE.name() + ":")
-                .append(dataType.name())
-                .append("\n");
-        if (group != null) {
-            sb.append(RM.GROUP.name() + ":").append(group).append("\n");
-        } else {
-            sb.append(RM.GROUP.name() + ":").append("").append("\n");
-        }
-        if (senderId != null) {
-            sb.append(RM.SENDER_ID.name() + ":").append(senderId).append("\n");
-        }
-        if (senderName != null) {
-            sb.append(RM.SENDER_NAME.name() + ":").append(senderName).append("\n");
-        }
-        if (timestamp != null) {
-            sb.append(RM.TIMESTAMP.name() + ":").append(timestamp).append("\n");
-        }
-        sb.append(RM.DATA.name() + ":").append(data).append("\n");
-        return sb.append("END_OF_RESPONSE").toString().trim();
+        sb.append(RM.STATUS.name()).append(":").append(status.name()).append("\n");
+        sb.append(RM.RESOURCE.name()).append(":").append(resource != null ? resource.name() : "").append("\n");
+        sb.append(RM.DATA_TYPE.name()).append(":").append(dataType.name()).append("\n");
+        sb.append(RM.GROUP.name()).append(":").append(group != null ? group : "").append("\n");
+        sb.append(RM.DATA.name()).append(":").append(data).append("\n");
+        return sb.append(END_OF_RESPONSE).toString().trim();
     }
 
-    /**
-     * @deprecated , use getResponseString instead.
-     * @return {String}
-     */
+    @Deprecated
     public String getResponse() {
         return getResponseString();
     }
@@ -155,59 +178,77 @@ public class ResponseBuilder implements Response {
         return getResponseString();
     }
 
+    @Override
     public ResponseStatus getStatus() {
         return status;
     }
 
+    @Override
     public void setStatus(ResponseStatus status) {
         this.status = status;
     }
 
+    @Override
+    public ResponseResource getResource() {
+        return resource;
+    }
+
+    public void setResource(ResponseResource resource) {
+        this.resource = resource;
+    }
+
+    @Override
     public DataType getDataType() {
         return dataType;
     }
 
+    @Override
     public void setDataType(DataType dataType) {
         this.dataType = dataType;
     }
 
+    @Override
     public String getGroup() {
         return group;
     }
 
+    @Override
     public void setGroup(String group) {
         this.group = group;
     }
 
+    @Override
     public String getData() {
         return data;
     }
 
+    @Override
     public void setData(String data) {
         this.data = data;
     }
 
-    public String getSenderId() {
-        return senderId;
+    // Sender fields removed from protocol
+
+    @Override
+    public boolean isOk() {
+        return this.status == ResponseStatus.OK;
     }
 
-    public void setSenderId(String senderId) {
-        this.senderId = senderId;
+    @Override
+    public boolean isError() {
+        return this.status == ResponseStatus.ERROR;
     }
 
-    public String getSenderName() {
-        return senderName;
+    @Override
+    public boolean isForbidden() {
+        return this.status == ResponseStatus.FORBIDDEN;
     }
 
-    public void setSenderName(String senderName) {
-        this.senderName = senderName;
+    public boolean isJson() {
+        return this.dataType == DataType.JSON;
     }
 
-    public String getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(String timestamp) {
-        this.timestamp = timestamp;
+    public boolean isText() {
+        return this.dataType == DataType.TEXT;
     }
 }

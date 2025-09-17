@@ -32,8 +32,7 @@ public class ConnectionManager implements ClientsManager {
 
     ServerSocket serverSocket;
     private final List<ClientHandler> clients = new ArrayList<>();
-    private final Map<String, ClientHandler> authenticatedClients =
-        new ConcurrentHashMap<>();
+    private final Map<String, ClientHandler> authenticatedClients = new ConcurrentHashMap<>();
 
     public ConnectionManager(ServerSocket serverSocket) {
         this.serverSocket = serverSocket;

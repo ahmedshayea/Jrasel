@@ -1,119 +1,200 @@
 package com.rasel.client;
 
+import java.io.IOException;
+import java.util.function.Consumer;
+
 import com.rasel.common.Credentials;
 import com.rasel.common.RequestBuilder;
-import com.rasel.common.RequestIntent;
 import com.rasel.common.ResponseParser;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.Socket;
+import com.rasel.common.ResponseResource;
 
+/**
+ * High-level client API for connecting to the server, authenticating,
+ * sending requests, and subscribing to asynchronous responses.
+ *
+ * Usage pattern:
+ * 1) connect()
+ * 2) authenticate(...) or signup(...)
+ * 3) send requests (requestGroups/requestUsers/sendMessage/etc.)
+ * 4) subscribe to resources (onUsers/onGroups/onMessages/onAuthSuccess/onAuthFailure)
+ *
+ * All responses are received asynchronously and dispatched to subscribers
+ * based on ResponseResource. Handlers typically run on a background thread;
+ * marshal to your UI thread as needed.
+ */
 public interface ClientInterface {
+
+    // Connection lifecycle
+
     /**
-     * connect the current client with the server,
-     * throws IOException if connection failed
-     * 
-     * @throws IOException
+     * Open the TCP connection to the server and start the background receiver.
+     *
+     * @throws IOException if the socket cannot be opened
      */
     void connect() throws IOException;
 
     /**
-     * authenticate current client
+     * Close the socket connection. Safe to call multiple times.
+     * This stops the background receiver and frees resources.
      *
-     * @param credentials, instance of class Credentials, username and password.
-     * @return boolean , true if auth succeeded, false otherwise
-     * @throws Exception
-     */
-    boolean authenticate(Credentials credentials) throws Exception;
-
-    /**
-     * create new account for the current client
-     * 
-     * @param credentials
-     * @return boolean, true if account created, faslse if something went wrong
-     * @throws Exception
-     */
-    boolean signup(Credentials credentials) throws Exception;
-
-    /**
-     * self explainatory
-     * 
-     * @return boolean
-     */
-    boolean isAuthenticated();
-
-    /**
-     * send message to group
-     *
-     * @param group,  group to send message to it.
-     *                **note**: request will fail if you are not member of that
-     *                group
-     * @param message
-     */
-    void sendMessage(String group, String message);
-
-    /**
-     * manually send request, this method is used internally to send requests,
-     * it is rarely accessed directly ,
-     * I just made it public to make client class more flexible.
-     *
-     * @param request, request instnace to be send
-     */
-    void sendRequest(RequestBuilder request);
-
-    /**
-     * retrieve the most recent response.
-     *
-     * @return ResponseParser, ResponseParser instance
-     * @throws Exception, throws exception when malformed response recieved and
-     *                    couldn't be parsed.
-     */
-    ResponseParser getResponse() throws Exception;
-
-    /**
-     * create new group , set admin of group to the current client ( user ).
-     *
-     * @param groupName, unique name for the group
-     * @return boolean, true when group created successfully, false otherwise
-     * @throws Exception
-     */
-    boolean createGroup(String groupName) throws Exception;
-
-    /**
-     *
-     * @return
-     * @throws Exception
-     */
-    String[] listGroups() throws Exception;
-
-    /**
-     * return list of usernames in the specific group
-     * 
-     * @return String[]
-     */
-    String[] getUsersInGroup(String groupName);
-
-    /**
-     * list all usernames in the system.
-     * 
-     * @return String[]
-     */
-    String[] getAvailableUsers();
-
-    /**
-     * request server to response with the list of groups
-     */
-    public void requestListGroups();
-
-    /**
-     * close socket connection
+     * @throws IOException if closing the socket fails
      */
     void disconnect() throws IOException;
 
     /**
-     * @return boolean, true if client is connected to the server, false otherwise
+     * @return true if a socket is currently connected and not closed
      */
     boolean isConnected();
+
+    // Authentication
+
+    /**
+     * Send an authentication request using the provided credentials.
+     * This is asynchronous; listen to AUTH_SUCCESS/AUTH_FAILURE via subscriptions.
+     *
+     * @param credentials username/password
+     */
+    void authenticate(Credentials credentials);
+
+    /**
+     * Send a signup request (create account) using the provided credentials.
+     * This is asynchronous; success/failure is delivered via subscriptions.
+     *
+     * @param credentials desired username/password
+     */
+    void signup(Credentials credentials);
+
+    /**
+     * @return last-known authentication state for this client instance
+     */
+    boolean isAuthenticated();
+
+    // Requests
+
+    /**
+     * Send a chat message to a specific group.
+     * The server will broadcast MESSAGES responses asynchronously.
+     *
+     * @param group   target group name
+     * @param message message content
+     */
+    void sendMessage(String group, String message);
+
+    /**
+     * Request creation of a new group.
+     * Result is delivered asynchronously (e.g., OK/ERROR via generic responses).
+     *
+     * @param groupName new group identifier
+     * @throws Exception if request construction or send fails
+     */
+    void requestCreateGroup(String groupName) throws Exception;
+
+    /**
+     * Request the server to send groups relevant to the user.
+     * Responses will be published with resource=GROUPS.
+     */
+    void requestGroups();
+
+    /**
+     * Request the server to send the list of users.
+     * Responses will be published with resource=USERS.
+     */
+    void requestUsers();
+
+    /**
+     * Request messages for the specified group (if supported by the protocol).
+     * Real-time messages will arrive via resource=MESSAGES.
+     *
+     * @param groupName group identifier
+     */
+    void requestMessages(String groupName);
+
+    /**
+     * Request adding a user to a group (admin-only).
+     * Result is delivered asynchronously.
+     *
+     * @param groupName target group
+     * @param username  username to add
+     */
+    void requestAddUserToGroup(String groupName, String username);
+
+    /**
+     * Low-level request sender for pre-built requests.
+     * Prefer the typed helpers above when possible.
+     *
+     * @param request a RequestBuilder with a complete request payload
+     */
+    void sendRequest(RequestBuilder request);
+
+    // Subscriptions (publish/subscribe by resource)
+
+    /**
+     * Subscribe to responses with resource=USERS.
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * Note: handler runs on a background thread; marshal to UI thread if needed.
+     *
+     * @param handler consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable onUsers(Consumer<ResponseParser> handler);
+
+    /**
+     * Subscribe to responses with resource=GROUPS.
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * @param handler consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable onGroups(Consumer<ResponseParser> handler);
+
+    /**
+     * Subscribe to responses with resource=MESSAGES.
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * @param handler consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable onMessages(Consumer<ResponseParser> handler);
+
+    /**
+     * Subscribe to authentication success events (resource=AUTH_SUCCESS).
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * @param handler consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable onAuthSuccess(Consumer<ResponseParser> handler);
+
+    /**
+     * Subscribe to authentication failure events (resource=AUTH_FAILURE).
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * @param handler consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable onAuthFailure(Consumer<ResponseParser> handler);
+
+    /**
+     * Generic subscription to any ResponseResource.
+     * Returns an AutoCloseable; call close() to unsubscribe.
+     *
+     * @param resource resource type to listen for
+     * @param handler  consumer of parsed responses
+     * @return unsubscribe handle
+     */
+    AutoCloseable on(ResponseResource resource, Consumer<ResponseParser> handler);
+
+    // Legacy (discouraged with async receiver running)
+
+    /**
+     * Deprecated: synchronous pull of a single response from the socket.
+     * Using this in parallel with the async receiver will cause contention.
+     * Prefer the subscription APIs above.
+     *
+     * @return a parsed response
+     * @throws Exception on I/O or protocol errors
+     */
+    @Deprecated
+    ResponseParser getResponse() throws Exception;
 }

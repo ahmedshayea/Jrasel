@@ -1,17 +1,22 @@
 package com.rasel.server.db;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Store user information.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class User {
 
-    static private int idCounter = 0;
-    final private String id;
     final private String username;
     private String password;
 
-    User(String username, String password) {
-        this.id = String.valueOf(++idCounter);
+    @JsonCreator
+    public User(
+            @JsonProperty("username") String username,
+            @JsonProperty("password") String password) {
         this.username = username;
         this.password = hashPassword(password);
     }
@@ -21,7 +26,7 @@ public class User {
     }
 
     public String getId() {
-        return id;
+        return username;
     }
 
     public Boolean checkPassword(String password) {

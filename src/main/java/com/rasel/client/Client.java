@@ -1,226 +1,231 @@
 package com.rasel.client;
 
-import com.rasel.common.Credentials;
-import com.rasel.common.RequestBuilder;
-import com.rasel.common.RequestIntent;
-import com.rasel.common.RequestParser;
-import com.rasel.common.ResponseParser;
-import com.rasel.server.logging.Log;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.function.Consumer;
+
+import com.rasel.common.Credentials;
+import com.rasel.common.RequestBuilder;
+import com.rasel.common.RequestIntent;
+import com.rasel.common.ResponseParser;
+import com.rasel.common.ResponseResource;
+import com.rasel.server.logging.Log;
 
 public class Client implements ClientInterface {
 
     private final String serverAddress;
     private final int serverPort;
-    Socket socket;
+
+    private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
-    private boolean authenticated = false;
+
+    private volatile boolean authenticated = false;
     private Credentials credentials;
+
+    private final ResponseBus responseBus = new ResponseBus();
+    private Thread receiverThread;
 
     public Client(String serverAddress, int serverPort) {
         this.serverAddress = serverAddress;
         this.serverPort = serverPort;
     }
 
+    // Connection lifecycle
+
+    @Override
     public void connect() throws IOException {
         socket = new Socket(serverAddress, serverPort);
         socket.setKeepAlive(true);
-
         out = new PrintWriter(socket.getOutputStream(), true);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        startReceiver();
     }
 
+    @Override
     public void disconnect() throws IOException {
-        socket.close();
-    }
-
-    public boolean isConnected() {
-        if (socket == null) return false;
-
-        return socket.isConnected();
-    }
-
-    public String[] getAvailableUsers() {
-        // TODO: implement this method
-        String[] availableUsers = new String[0];
-        return availableUsers;
-    }
-
-    public String[] getUsersInGroup(String groupName) {
-        // TODO: implement this method
-        return new String[0];
-    }
-
-    public boolean authenticate(Credentials credentials) throws Exception {
-        this.credentials = credentials;
-        String authRequest = com.rasel.common.RequestBuilder.authRequest(
-            credentials
-        );
-        sendRequest(authRequest);
-        ResponseParser response = getResponse();
-        authenticated = response.isOk();
-        return authenticated;
-    }
-
-    public boolean signup(Credentials credentials) throws Exception {
-        // Build SIGNUP request using RequestBuilder
-        this.credentials = credentials; // ensure subsequent requests have creds
-        RequestBuilder request = new RequestBuilder(
-            RequestIntent.SIGNUP,
-            credentials,
-            null, // No group for signup
-            null // No data for signup
-        );
-
-        // Send request to server
-        sendRequest(request.getRequest());
-
-        // Wait for response
-        ResponseParser response = getResponse();
-        if (response.isOk()) {
-            setAuthenticated(true);
-            return true;
-        } else {
-            setAuthenticated(false);
-            return false;
+        if (socket != null && !socket.isClosed()) {
+            socket.close(); // this will also unblock the receiver thread
         }
     }
 
+    @Override
+    public boolean isConnected() {
+        return socket != null && socket.isConnected() && !socket.isClosed();
+    }
+
+    // Authentication
+
+    @Override
+    public void authenticate(Credentials credentials) {
+        this.credentials = credentials;
+        String authRequest = RequestBuilder.authRequest(credentials);
+        sendRequest(authRequest);
+    }
+
+    @Override
+    public void signup(Credentials credentials) {
+        this.credentials = credentials;
+        RequestBuilder request = new RequestBuilder(
+                RequestIntent.SIGNUP,
+                credentials,
+                null,
+                null
+        );
+        sendRequest(request.getRequest());
+    }
+
+    @Override
     public boolean isAuthenticated() {
         return authenticated;
     }
 
-    /**
-     * TODO: this method should be removed, you should not allow
-     * direct modification to authenticated state
-     *
-     * @param value
-     */
-    public void setAuthenticated(boolean value) {
-        authenticated = value;
-    }
+    // Requests
 
-    /**
-     */
+    @Override
     public void sendMessage(String group, String message) {
-        if (authenticated) {
-            String request = RequestBuilder.sendMessageRequest(
-                credentials,
-                group,
-                message
-            );
-            sendRequest(request);
-        }
+        if (!authenticated) return;
+        String request = RequestBuilder.sendMessageRequest(credentials, group, message);
+        sendRequest(request);
     }
 
-    public void sendRequest(String request) {
-        out.println(request);
-    }
-
-    public void sendRequest(RequestBuilder request) {
-        out.println(request.getRequest());
-    }
-
-    public ResponseParser getResponse() throws Exception {
-        StringBuilder sb = new StringBuilder(256);
-        String line;
-        boolean ended = false;
-        int lineCount = 0;
-        final int MAX_LINES = 10000;
-
-        while ((line = in.readLine()) != null) {
-            if ("END_OF_RESPONSE".equals(line)) {
-                ended = true;
-                break;
-            }
-            sb.append(line).append('\n');
-            if (++lineCount > MAX_LINES) {
-                throw new Exception("Response too large");
-            }
-        }
-
-        if (!ended) {
-            throw new IOException("Stream ended before END_OF_RESPONSE");
-        }
-
-        String payload = sb.toString();
-        if (payload.isBlank()) {
-            throw new Exception("Empty response");
-        }
-
-        // Prime keys to avoid stale values from static Parser.macros and ensure
-        // defaults
-        String primed = "STATUS:\nDATA_TYPE:\nGROUP:\nDATA:\n" + payload;
-        return new ResponseParser(primed);
-    }
-
-    private BufferedReader getInputStream() {
-        return in;
-    }
-
-    // --- Group related helpers ---
-
-    public boolean createGroup(String groupName) throws Exception {
-        if (!authenticated) return false;
-        String req = RequestBuilder.createGroupRequest(credentials, groupName);
-        sendRequest(req);
-        ResponseParser resp = getResponse();
-        return resp.isOk();
-    }
-
-    public String[] listGroups() throws Exception {
-        if (!authenticated) return new String[0];
-        // Request without group to get all groups
-        String req = RequestBuilder.getGroupRequest(credentials, null);
-        sendRequest(req);
-        ResponseParser resp = getResponse();
-        if (!resp.isOk()) return new String[0];
-        String data = resp.getData();
-        if (
-            data == null || data.isBlank() || data.equals("No groups available")
-        ) return new String[0];
-        System.out.println(data);
-        return data.split(",");
-    }
-
-    // Non-blocking helpers (do not await response; let a single receiver consume)
-    public void requestCreateGroup(String groupName) {
+    @Override
+    public void requestCreateGroup(String groupName) throws Exception {
         if (!authenticated) return;
         String req = RequestBuilder.createGroupRequest(credentials, groupName);
         sendRequest(req);
     }
 
-    public void requestListGroups() {
+    @Override
+    public void requestGroups() {
         if (!authenticated) return;
         String req = RequestBuilder.getGroupsRequest(credentials);
         sendRequest(req);
     }
 
-    public void requestAddUserToGroup(String groupName, String username) {
-        if (!authenticated) return;
-        String req = RequestBuilder.addUserToGroupRequest(
-            credentials,
-            groupName,
-            username
-        );
-        sendRequest(req);
-    }
-
-    public void requestGetUsers() {
+    @Override
+    public void requestUsers() {
         if (!authenticated) return;
         String req = RequestBuilder.getUsersRequest(credentials);
         sendRequest(req);
     }
 
-    public void requestGetUsers(String groupName) {
+    @Override
+    public void requestMessages(String groupName) {
         if (!authenticated) return;
-        String req = RequestBuilder.getUsersRequest(credentials, groupName);
+        // Implement once RequestBuilder supports it; keep non-throwing.
+        // Example:
+        // String req = RequestBuilder.getMessagesRequest(credentials, groupName);
+        // sendRequest(req);
+        Log.info("requestMessages: not implemented in RequestBuilder; group=%s", groupName);
+    }
+
+    @Override
+    public void requestAddUserToGroup(String groupName, String username) {
+        if (!authenticated) return;
+        String req = RequestBuilder.addUserToGroupRequest(credentials, groupName, username);
         sendRequest(req);
+    }
+
+    @Override
+    public void sendRequest(RequestBuilder request) {
+        sendRequest(request.getRequest());
+    }
+
+    // Legacy (discouraged with async receiver running)
+
+    @Deprecated
+    @Override
+    public ResponseParser getResponse() throws Exception {
+        throw new UnsupportedOperationException("Synchronous getResponse() is disabled; use subscriber APIs.");
+    }
+
+    // Subscriptions
+
+    @Override
+    public AutoCloseable onUsers(Consumer<ResponseParser> handler) {
+        return responseBus.on(ResponseResource.USERS, handler);
+    }
+
+    @Override
+    public AutoCloseable onGroups(Consumer<ResponseParser> handler) {
+        return responseBus.on(ResponseResource.GROUPS, handler);
+    }
+
+    @Override
+    public AutoCloseable onMessages(Consumer<ResponseParser> handler) {
+        return responseBus.on(ResponseResource.MESSAGES, handler);
+    }
+
+    @Override
+    public AutoCloseable onAuthSuccess(Consumer<ResponseParser> handler) {
+        // Update state when event arrives then forward to handler
+        return responseBus.on(ResponseResource.AUTH_SUCCESS, resp -> {
+            authenticated = true;
+            if (handler != null) handler.accept(resp);
+        });
+    }
+
+    @Override
+    public AutoCloseable onAuthFailure(Consumer<ResponseParser> handler) {
+        return responseBus.on(ResponseResource.AUTH_FAILURE, resp -> {
+            authenticated = false;
+            if (handler != null) handler.accept(resp);
+        });
+    }
+
+    @Override
+    public AutoCloseable on(ResponseResource resource, Consumer<ResponseParser> handler) {
+        return responseBus.on(resource, handler);
+    }
+
+    // Internals
+
+    public void sendRequest(String request) {
+        if (!isConnected()) return;
+        out.println(request);
+    }
+
+    private void startReceiver() {
+        receiverThread = new Thread(this::receiveLoop, "response-receiver");
+        receiverThread.setDaemon(true);
+        receiverThread.start();
+    }
+
+    private void receiveLoop() {
+        try {
+            while (!Thread.currentThread().isInterrupted() && isConnected()) {
+                StringBuilder sb = new StringBuilder(256);
+                String line;
+                boolean ended = false;
+                int lineCount = 0;
+                final int MAX_LINES = 10000;
+
+                while ((line = in.readLine()) != null) {
+                    if ("END_OF_RESPONSE".equals(line)) {
+                        ended = true;
+                        break;
+                    }
+                    sb.append(line).append('\n');
+                    if (++lineCount > MAX_LINES) throw new IOException("Response too large");
+                }
+                if (!ended) break; // socket probably closed
+
+                String payload = sb.toString();
+                if (payload.isBlank()) continue;
+
+                // Prime keys to avoid stale values
+                String primed = "STATUS:\nRESOURCE:\nDATA_TYPE:\nGROUP:\nDATA:\n" + payload;
+                ResponseParser resp = new ResponseParser(primed);
+
+                responseBus.publish(resp);
+            }
+        } catch (Exception e) {
+            Log.warn("Receiver loop terminated: %s", e.getMessage());
+        }
     }
 
     public String getUsername() {

@@ -9,12 +9,7 @@ import com.rasel.server.db.User;
  * @author shayea
  */
 public class AuthenticationManager {
-
-    DatabaseManager db;
-
-    public AuthenticationManager(DatabaseManager db) {
-        this.db = db;
-    }
+    public AuthenticationManager() {}
 
     public User authenticate(String username, String password) {
         User user = DatabaseManager.userManager.getUser(username);

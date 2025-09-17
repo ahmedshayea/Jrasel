@@ -1,24 +1,25 @@
 package com.rasel.server;
 
-import com.rasel.common.RequestIntent;
-import com.rasel.common.RequestParser;
-import com.rasel.common.Response;
-import com.rasel.common.ResponseBuilder;
-import com.rasel.server.db.DatabaseManager;
-import com.rasel.server.db.Group;
-import com.rasel.server.db.User;
-import com.rasel.server.logging.Log;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.ResponseCache;
 import java.net.Socket;
-import java.util.ArrayList;
+
+import com.rasel.common.DataType;
+import com.rasel.common.RequestParser;
+import com.rasel.common.Response;
+import com.rasel.common.ResponseBuilder;
+import com.rasel.common.ResponseResource;
+import com.rasel.common.ResponseStatus;
+import com.rasel.server.db.ChatMessage;
+import com.rasel.server.db.DatabaseManager;
+import com.rasel.server.db.Group;
+import com.rasel.server.db.User;
+import com.rasel.server.logging.Log;
 
 /**
- * TODO: write comprehensive docs for this client handler class.
- * ClientHandler
+ * TODO: write comprehensive docs for this client handler class. ClientHandler
  */
 public class ClientHandler implements Runnable {
 
@@ -36,35 +37,30 @@ public class ClientHandler implements Runnable {
 
     private AuthenticationManager authManager;
 
-    private static final DatabaseManager dbManager = new DatabaseManager();
-
+    // Use DatabaseManager static singletons directly
     public ClientHandler(
-        Socket clientSocket,
-        User user,
-        ConnectionManager connectionManager
-    ) {
+            Socket clientSocket,
+            User user,
+            ConnectionManager connectionManager) {
         this.clientSocket = clientSocket;
         this.user = user;
         this.connectionManager = connectionManager;
-        this.authManager = new AuthenticationManager(dbManager);
+        this.authManager = new AuthenticationManager();
 
         try {
             in = new BufferedReader(
-                new InputStreamReader(clientSocket.getInputStream())
-            );
+                    new InputStreamReader(clientSocket.getInputStream()));
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             Log.debug(
-                "Initialized IO streams for client %s:%d",
-                clientSocket.getInetAddress().getHostAddress(),
-                clientSocket.getPort()
-            );
+                    "Initialized IO streams for client %s:%d",
+                    clientSocket.getInetAddress().getHostAddress(),
+                    clientSocket.getPort());
         } catch (IOException e) {
             Log.error(
-                "Failed to initialize IO streams for client %s:%d",
-                e,
-                clientSocket.getInetAddress().getHostAddress(),
-                clientSocket.getPort()
-            );
+                    "Failed to initialize IO streams for client %s:%d",
+                    e,
+                    clientSocket.getInetAddress().getHostAddress(),
+                    clientSocket.getPort());
         }
     }
 
@@ -101,26 +97,23 @@ public class ClientHandler implements Runnable {
     public void run() {
         try {
             Log.info(
-                "Client connected %s:%d",
-                clientSocket.getInetAddress().getHostAddress(),
-                clientSocket.getPort()
-            );
+                    "Client connected %s:%d",
+                    clientSocket.getInetAddress().getHostAddress(),
+                    clientSocket.getPort());
             while (true) {
                 RequestParser request = getRequest();
                 Log.debug(
-                    "Handling request intent=%s auth=%s",
-                    request.getIntent(),
-                    request.isAuth()
-                );
+                        "Handling request intent=%s auth=%s",
+                        request.getIntent(),
+                        request.isAuth());
                 handleRequest(request);
             }
         } catch (Exception e) {
             Log.error(
-                "Client loop error for %s:%d",
-                e,
-                clientSocket.getInetAddress().getHostAddress(),
-                clientSocket.getPort()
-            );
+                    "Client loop error for %s:%d",
+                    e,
+                    clientSocket.getInetAddress().getHostAddress(),
+                    clientSocket.getPort());
         } finally {
             try {
                 if (in != null) {
@@ -133,65 +126,45 @@ public class ClientHandler implements Runnable {
                     clientSocket.close();
                 }
                 Log.info(
-                    "Client disconnected %s:%d",
-                    clientSocket.getInetAddress().getHostAddress(),
-                    clientSocket.getPort()
-                );
+                        "Client disconnected %s:%d",
+                        clientSocket.getInetAddress().getHostAddress(),
+                        clientSocket.getPort());
             } catch (IOException e) {
                 Log.warn(
-                    "Error during client cleanup %s:%d",
-                    e,
-                    clientSocket.getInetAddress().getHostAddress(),
-                    clientSocket.getPort()
-                );
+                        "Error during client cleanup %s:%d",
+                        e,
+                        clientSocket.getInetAddress().getHostAddress(),
+                        clientSocket.getPort());
             }
         }
     }
 
     void handleRequest(RequestParser request) {
         if (!isAuthenticated && !(request.isAuth() || request.isSignup())) {
-            sendResponse(
-                ResponseBuilder.forbidden("you should be authenticated first")
-            );
+            sendResponse(ResponseBuilder.forbidden("you should be authenticated first"));
             Log.warn(
-                "Forbidden request from unauthenticated client intent=%s",
-                request.getIntent()
-            );
+                    "Forbidden request from unauthenticated client intent=%s",
+                    request.getIntent());
             return;
         }
 
-        Response response = null;
         switch (request.getIntent()) {
-            case AUTH -> response = handleAuth(request);
-            case SIGNUP -> response = handleSignup(request);
-            case SEND -> response = handleSend(request);
-            case CREATE -> response = handleCreate(request);
-            case GET -> response = handleGet(request);
-            case GET_GROUPS -> response = handleGetGroups(request);
-            case GET_USERS -> response = handleGetUsers(request);
-            case ADD -> response = handleAdd(request);
-        }
-
-        // Centralized sending strategy
-        if (request.getIntent() == RequestIntent.SEND) {
-            Response err = sendMessageToGroup(response, request.getGroup());
-            if (err != null) {
-                sendResponse(err);
-            } else {
-                Log.info(
-                    "Message delivered user=%s group=%s size=%d",
-                    this.user != null ? this.user.getUsername() : "?",
-                    request.getGroup(),
-                    request.getData() != null ? request.getData().length() : 0
-                );
-            }
-        } else if (response != null) {
-            // Reply only to the current client
-            sendResponse(response);
-        }
-
-        if (response != null) {
-            logResponse(response);
+            case AUTH ->
+                handleAuth(request);
+            case SIGNUP ->
+                handleSignup(request);
+            case SEND ->
+                handleSend(request);
+            case CREATE ->
+                handleCreate(request);
+            case GET ->
+                handleGet(request);
+            case GET_GROUPS ->
+                handleGetGroups(request);
+            case GET_USERS ->
+                handleGetUsers(request);
+            case ADD ->
+                handleAdd(request);
         }
     }
 
@@ -199,20 +172,27 @@ public class ClientHandler implements Runnable {
      * return all groups that user is member of
      *
      * @param request
-     * @return
      */
-    Response handleGetGroups(RequestParser request) {
-        var groups = dbManager.groupManager.getUserGruops(user);
-        // this will return a list with group names like this [group1, group2, ...],
-        // with brackets included.
-        return ResponseBuilder.ok(groups.toString());
+    void handleGetGroups(RequestParser request) {
+        var groups = DatabaseManager.groupManager.getUserGruops(user);
+        // Tag resource so client.onGroups() subscribers receive it
+        var resp = ResponseBuilder.ok(groups.toString(), ResponseResource.GROUPS);
+        sendResponse(resp);
+        logResponse(resp);
     }
 
-    Response handleGetUsers(RequestParser request) {
-        var users = dbManager.userManager.getAllUsers();
-        // this will return a list with group names like this [user1, user2, ...],
-        // with brackets included.
-        return ResponseBuilder.ok(users.toString());
+    /**
+     * return all users in the system, send response with resource of 'users' to
+     * the client
+     *
+     * @param request
+     */
+    void handleGetUsers(RequestParser request) {
+        var users = DatabaseManager.userManager.getAllUsers();
+        // Tag resource so client.onUsers() subscribers receive it
+        var resp = ResponseBuilder.ok(users.toString(), ResponseResource.USERS);
+        sendResponse(resp);
+        logResponse(resp);
     }
 
     /**
@@ -220,147 +200,167 @@ public class ClientHandler implements Runnable {
      * client to auth client list stored in connectionManager, if not, return
      * ERROR response,
      */
-    ResponseBuilder handleAuth(RequestParser request) {
+    void handleAuth(RequestParser request) {
         var credentials = request.getCredentials();
 
         if (credentials == null) {
-            return ResponseBuilder.error("Credentials must be provided");
+            var resp = new ResponseBuilder(
+                "Credentials must be provided",
+                DataType.TEXT,
+                null,
+                ResponseStatus.ERROR,
+                ResponseResource.AUTH_FAILURE
+            );
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
 
         User authUser = authManager.authenticate(
-            credentials.getUsername(),
-            credentials.getPassword()
-        );
+                credentials.getUsername(),
+                credentials.getPassword());
 
         ResponseBuilder response;
-        // success authentication
         if (authUser != null) {
-            // add to auth list
             connectionManager.addAuthenticatedClient(authUser.getId(), this);
             isAuthenticated = true;
             this.user = authUser;
-            // return success response
-            response = ResponseBuilder.ok("successfull authentication");
-            Log.info(
-                "Authentication succeeded userId=%s username=%s",
-                authUser.getId(),
-                authUser.getUsername()
+
+            response = new ResponseBuilder(
+                "Authentication successful",
+                DataType.TEXT,
+                null,
+                ResponseStatus.OK,
+                ResponseResource.AUTH_SUCCESS
             );
+            Log.info("Authentication succeeded userId=%s username=%s",
+                    authUser.getId(), authUser.getUsername());
         } else {
-            response = ResponseBuilder.error("invalide credentials");
-            Log.warn(
-                "Authentication failed username=%s",
-                credentials.getUsername()
+            response = new ResponseBuilder(
+                "Invalid credentials",
+                DataType.TEXT,
+                null,
+                ResponseStatus.FORBIDDEN,
+                ResponseResource.AUTH_FAILURE
             );
+            Log.warn("Authentication failed username=%s", credentials.getUsername());
         }
-        return response;
+        sendResponse(response);
+        logResponse(response);
     }
 
-    ResponseBuilder handleSignup(RequestParser request) {
+    void handleSignup(RequestParser request) {
         var credentials = request.getCredentials();
         ResponseBuilder response;
         try {
             User createdUser = DatabaseManager.userManager.createUser(
-                credentials.getUsername(),
-                credentials.getPassword()
-            );
+                    credentials.getUsername(),
+                    credentials.getPassword());
             if (createdUser != null) {
                 connectionManager.addAuthenticatedClient(
-                    createdUser.getId(),
-                    this
-                );
+                        createdUser.getId(),
+                        this);
                 isAuthenticated = true;
                 this.user = createdUser;
-                response = ResponseBuilder.ok(
-                    "Signup successful and authenticated"
+
+                // Important: emit AUTH_SUCCESS so login subscribers fire
+                response = new ResponseBuilder(
+                        "Signup successful and authenticated",
+                        DataType.TEXT,
+                        null,
+                        ResponseStatus.OK,
+                        ResponseResource.AUTH_SUCCESS
                 );
                 Log.info(
-                    "Signup succeeded userId=%s username=%s",
-                    createdUser.getId(),
-                    createdUser.getUsername()
-                );
+                        "Signup succeeded userId=%s username=%s",
+                        createdUser.getId(),
+                        createdUser.getUsername());
             } else {
-                response = ResponseBuilder.error("Signup failed");
-                Log.warn(
-                    "Signup failed for username=%s (unknown reason)",
-                    credentials.getUsername()
+                // Emit AUTH_FAILURE to trigger failure subscribers
+                response = new ResponseBuilder(
+                        "Signup failed",
+                        DataType.TEXT,
+                        null,
+                        ResponseStatus.ERROR,
+                        ResponseResource.AUTH_FAILURE
                 );
+                Log.warn(
+                        "Signup failed for username=%s (unknown reason)",
+                        credentials.getUsername());
             }
         } catch (Exception e) {
             Log.error(
-                "Signup error for username=%s",
-                e,
-                credentials.getUsername()
+                    "Signup error for username=%s",
+                    e,
+                    credentials.getUsername());
+            // Emit AUTH_FAILURE to trigger failure subscribers
+            response = new ResponseBuilder(
+                    "User already exists",
+                    DataType.TEXT,
+                    null,
+                    ResponseStatus.ERROR,
+                    ResponseResource.AUTH_FAILURE
             );
-            response = ResponseBuilder.error("User already exists");
         }
-        return response;
+        sendResponse(response);
+        logResponse(response);
     }
 
-    // Removed unused sendMessage helper (broadcasts handled centrally)
-    void sendResponse(Response response) {
-        out.println(response.getResponseString());
-    }
-
-    ResponseBuilder handleSend(RequestParser request) {
-        // Build response with sender info; sending handled by handleRequest
-        String now = java.time.Instant.now().toString();
-        String sid = this.user != null ? this.user.getId() : null;
-        String sname = this.user != null ? this.user.getUsername() : null;
-        return ResponseBuilder.okWithSender(
-            request.getData(),
-            request.getGroup(),
-            sid,
-            sname,
-            now
-        );
-    }
-
-    ResponseBuilder sendMessageToGroup(Response response, String groupName) {
+    void handleSend(RequestParser request) {
+        String groupName = request.getGroup();
         if (groupName == null || groupName.isBlank()) {
-            Log.warn(
-                "SEND missing group by userId=%s",
-                this.user != null ? this.user.getId() : "?"
-            );
-            return ResponseBuilder.error("Group is required");
+            var err = ResponseBuilder.error("Group is required");
+            sendResponse(err);
+            logResponse(err);
+            return;
         }
+
         Group group = DatabaseManager.groupManager.getGroup(groupName);
         if (group == null) {
-            Log.warn(
-                "SEND to non-existent group=%s by userId=%s",
-                groupName,
-                this.user != null ? this.user.getId() : "?"
-            );
-            return ResponseBuilder.error("Group not found");
-        }
-        if (this.user == null || !group.isMember(this.user)) {
-            Log.warn(
-                "SEND forbidden: userId=%s not member of group=%s",
-                this.user != null ? this.user.getId() : "?",
-                groupName
-            );
-            return ResponseBuilder.forbidden(
-                "You are not a member of this group"
-            );
+            var err = ResponseBuilder.error("Group not found");
+            sendResponse(err);
+            logResponse(err);
+            return;
         }
 
+        if (this.user == null || !group.isMember(this.user)) {
+            var err = ResponseBuilder.forbidden("You are not a member of this group");
+            sendResponse(err);
+            logResponse(err);
+            return;
+        }
+
+        // Build domain message
+        String now = java.time.Instant.now().toString();
+        User sender = this.user;
+        String content = request.getData();
+
+        ChatMessage chatMessage = new ChatMessage(sender, content, group, now);
+        DatabaseManager.chatMessageManager.addMessage(chatMessage);
+
+        // Serialize as JSON payload
+        com.rasel.server.db.ChatMessageSerializer serializer = new com.rasel.server.db.ChatMessageSerializer();
+        String json = serializer.serialize(chatMessage);
+
+        var response = ResponseBuilder
+                .ok(json, com.rasel.common.DataType.JSON, groupName, ResponseResource.MESSAGES);
+
+        // Broadcast to all group members
         int delivered = 0;
         for (User member : group.getMembers()) {
-            ClientHandler client = connectionManager.getClientHandlerByUserId(
-                member.getId()
-            );
+            ClientHandler client = connectionManager.getClientHandlerByUserId(member.getId());
             if (client != null) {
                 client.sendResponse(response);
                 delivered++;
             }
         }
-        Log.debug(
-            "Broadcasted to %d/%d members group=%s",
-            delivered,
-            group.getMembers().size(),
-            groupName
-        );
-        return null;
+        Log.info(
+                "Message delivered user=%s group=%s size=%d delivered=%d/%d",
+                this.user != null ? this.user.getUsername() : "?",
+                groupName,
+                content != null ? content.length() : 0,
+                delivered,
+                group.getMembers().size());
     }
 
     /**
@@ -368,106 +368,143 @@ public class ClientHandler implements Runnable {
      *
      * @param request
      */
-    ResponseBuilder handleCreate(RequestParser request) {
+    void handleCreate(RequestParser request) {
         String groupIdentifier = request.getGroup();
         Group group = DatabaseManager.groupManager.getGroup(groupIdentifier);
         if (group != null) {
             Log.warn(
-                "Group creation failed name=%s by userId=%s (already exists)",
-                groupIdentifier,
-                this.user != null ? this.user.getId() : "?"
-            );
-            return ResponseBuilder.error("Group already exists");
+                    "Group creation failed name=%s by userId=%s (already exists)",
+                    groupIdentifier,
+                    this.user != null ? this.user.getId() : "?");
+            var resp = ResponseBuilder.error("Group already exists");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         try {
             DatabaseManager.groupManager.createGroup(
-                groupIdentifier,
-                this.user
-            );
+                    groupIdentifier,
+                    this.user);
             Log.info(
-                "Group created name=%s by userId=%s",
-                groupIdentifier,
-                this.user != null ? this.user.getId() : "?"
-            );
-            return ResponseBuilder.ok("Group created successfully");
+                    "Group created name=%s by userId=%s",
+                    groupIdentifier,
+                    this.user != null ? this.user.getId() : "?");
+            var resp = ResponseBuilder.ok("Group created successfully");
+            sendResponse(resp);
+            logResponse(resp);
         } catch (Exception e) {
             Log.error(
-                "Failed to create group name=%s by userId=%s",
-                e,
-                groupIdentifier,
-                this.user != null ? this.user.getId() : "?"
-            );
-            return ResponseBuilder.error("Failed to create group");
+                    "Failed to create group name=%s by userId=%s",
+                    e,
+                    groupIdentifier,
+                    this.user != null ? this.user.getId() : "?");
+            var resp = ResponseBuilder.error("Failed to create group");
+            sendResponse(resp);
+            logResponse(resp);
         }
     }
 
-    ResponseBuilder handleGet(RequestParser request) {
-        // List available groups in a pretty bullet list
+    void handleGet(RequestParser request) {
         var groups = DatabaseManager.groupManager.getAllGroups();
         if (groups.isEmpty()) {
-            return ResponseBuilder.ok("No groups available");
+            var resp = ResponseBuilder.ok("No groups available");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         StringBuilder sb = new StringBuilder();
         sb.append("Groups:\n");
         for (int i = 0; i < groups.size(); i++) {
             sb.append(" - ").append(groups.get(i).getName());
-            if (i < groups.size() - 1) sb.append("\n");
+            if (i < groups.size() - 1) {
+                sb.append("\n");
+            }
         }
-        return ResponseBuilder.ok(sb.toString());
+        var resp = ResponseBuilder.ok(sb.toString());
+        sendResponse(resp);
+        logResponse(resp);
     }
 
-    ResponseBuilder handleAdd(RequestParser request) {
+    void handleAdd(RequestParser request) {
         String groupName = request.getGroup();
         String usernameToAdd = request.getData(); // overload DATA with username
-        if (
-            groupName == null ||
-            groupName.isBlank() ||
-            usernameToAdd == null ||
-            usernameToAdd.isBlank()
-        ) {
-            return ResponseBuilder.error("Group and username are required");
+        if (groupName == null
+                || groupName.isBlank()
+                || usernameToAdd == null
+                || usernameToAdd.isBlank()) {
+            var resp = ResponseBuilder.error("Group and username are required");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         Group group = DatabaseManager.groupManager.getGroup(groupName);
         if (group == null) {
-            return ResponseBuilder.error("Group not found");
+            var resp = ResponseBuilder.error("Group not found");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         if (this.user == null || !group.isAdmin(this.user)) {
-            return ResponseBuilder.forbidden(
-                "Only group admin can add members"
-            );
+            var resp = ResponseBuilder.forbidden("Only group admin can add members");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         var target = DatabaseManager.userManager.findByUsername(usernameToAdd);
         if (target == null) {
-            return ResponseBuilder.error("User not found");
+            var resp = ResponseBuilder.error("User not found");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         if (group.isMember(target)) {
-            return ResponseBuilder.ok("User is already a member");
+            var resp = ResponseBuilder.ok("User is already a member");
+            sendResponse(resp);
+            logResponse(resp);
+            return;
         }
         try {
             DatabaseManager.groupManager.addMember(groupName, target);
             Log.info(
-                "User added to group group=%s by admin=%s user=%s",
-                groupName,
-                this.user.getUsername(),
-                target.getUsername()
-            );
-            return ResponseBuilder.ok("User added successfully");
+                    "User added to group group=%s by admin=%s user=%s",
+                    groupName,
+                    this.user.getUsername(),
+                    target.getUsername());
+            var resp = ResponseBuilder.ok("User added successfully");
+            sendResponse(resp);
+            logResponse(resp);
         } catch (Exception e) {
             Log.error(
-                "Failed to add user to group group=%s username=%s",
-                e,
-                groupName,
-                usernameToAdd
-            );
-            return ResponseBuilder.error("Failed to add user");
+                    "Failed to add user to group group=%s username=%s",
+                    e,
+                    groupName,
+                    usernameToAdd);
+            var resp = ResponseBuilder.error("Failed to add user");
+            sendResponse(resp);
+            logResponse(resp);
         }
+    }
+
+    void sendResponse(ResponseBuilder response) {
+        if (response == null) {
+            Log.error("Attempted to send null response");
+            return;
+        }
+        String payload = response.getResponseString();
+        if (payload == null || payload.isBlank()) {
+            Log.error("Attempted to send empty response");
+            return;
+        }
+        out.println(payload);
+        out.flush();
+        Log.trace("Sent response (%d chars)", payload.length());
+
     }
 
     void logResponse(Response response) {
         Log.debug(
-            "Response status=%s group=%s",
-            response.getStatus().name(),
-            response.getGroup()
-        );
+                "Response status=%s group=%s",
+                response.getStatus().name(),
+                response.getGroup());
     }
 }

@@ -1,26 +1,23 @@
 package com.rasel.common;
 
+import com.rasel.server.logging.Log;
+
 public class ResponseParser extends Parser {
 
     ResponseStatus status;
     DataType dataType;
+    ResponseResource resource;
     String group;
     String data;
-    String senderId;
-    String senderName;
-    String timestamp;
 
     private static final String STATUS = "STATUS";
+    private static final String RESOURCE = "RESOURCE";
     private static final String DATA_TYPE = "DATA_TYPE";
     private static final String GROUP = "GROUP";
     private static final String DATA = "DATA";
-    private static final String SENDER_ID = "SENDER_ID";
-    private static final String SENDER_NAME = "SENDER_NAME";
-    private static final String TIMESTAMP = "TIMESTAMP";
 
     static {
-        // List of macro keys to initialize
-    String[] macroKeys = { STATUS, DATA_TYPE, GROUP, DATA, SENDER_ID, SENDER_NAME, TIMESTAMP };
+    String[] macroKeys = { STATUS, RESOURCE, DATA_TYPE, GROUP, DATA };
         for (String key : macroKeys) {
             macros.put(key, "");
         }
@@ -28,49 +25,47 @@ public class ResponseParser extends Parser {
 
     public ResponseParser(String stream) throws Exception {
         super(stream);
+
         String statusString = macros.get(STATUS);
-        // Set intent value
-        status = switch (statusString.trim().toUpperCase()) {
-            case "OK" -> ResponseStatus.OK;
-            case "FORBIDDEN" -> ResponseStatus.FORBIDDEN;
-            case "ERROR" -> ResponseStatus.ERROR;
-            default -> {
-                System.out.println(
-                        "[ERROR] Invalid response status: " + statusString);
-                throw new Exception(
-                        "status: " + "{" + statusString + "}" + " is invalid");
+        try {
+            status = ResponseStatus.valueOf(statusString.trim().toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            Log.error("Invalid response status: %s", statusString);
+            throw new Exception("status: {" + statusString + "} is invalid");
+        }
+
+        String resourceString = macros.get(RESOURCE);
+        if (resourceString != null && !resourceString.trim().isEmpty()) {
+            try {
+                resource = ResponseResource.valueOf(resourceString.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                Log.warn("Invalid resource type: %s", resourceString);
+                resource = null;
             }
-        };
+        } else {
+            resource = null;
+        }
 
         String dataTypeString = macros.get(DATA_TYPE);
-        dataType = switch (dataTypeString.trim().toUpperCase()) {
-            case "TEXT" -> DataType.TEXT;
-            case "JSON" -> DataType.JSON;
-            default -> {
-                System.out.println(
-                        "[ERROR] Invalid data type : " + dataTypeString);
-                throw new Exception(
-                        "data type: " + "{" + dataTypeString + "}" + " is invalid");
-            }
-        };
+        try {
+            dataType = DataType.valueOf(dataTypeString.trim().toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            Log.error("Invalid data type: %s", dataTypeString);
+            throw new Exception("data type: {" + dataTypeString + "} is invalid");
+        }
 
-    group = macros.get(GROUP);
-    data = macros.get(DATA);
-    senderId = macros.get(SENDER_ID);
-    senderName = macros.get(SENDER_NAME);
-    timestamp = macros.get(TIMESTAMP);
+        group = macros.get(GROUP);
+        data = macros.get(DATA);
+    // sender info is part of DATA (JSON) when resource=MESSAGES
     }
 
-    /**
-     * print request in human readable format.
-     */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("ResponseParser{");
         sb.append("status=").append(status);
-        sb.append(", dataType=");
-        sb.append(dataType);
+        sb.append(", resource=").append(resource);
+        sb.append(", dataType=").append(dataType);
         sb.append(", group='").append(group).append("'");
         sb.append(", data='").append(data).append("'");
         sb.append('}');
@@ -79,6 +74,10 @@ public class ResponseParser extends Parser {
 
     public ResponseStatus getStatus() {
         return status;
+    }
+
+    public ResponseResource getResource() {
+        return resource;
     }
 
     public DataType getDataType() {
@@ -105,15 +104,13 @@ public class ResponseParser extends Parser {
         return status == ResponseStatus.ERROR;
     }
 
-    public String getSenderId() {
-        return senderId;
+
+    public boolean isJson() {
+        return this.dataType == DataType.JSON;
     }
 
-    public String getSenderName() {
-        return senderName;
+    public boolean isText() {
+        return this.dataType == DataType.TEXT;
     }
 
-    public String getTimestamp() {
-        return timestamp;
-    }
 }

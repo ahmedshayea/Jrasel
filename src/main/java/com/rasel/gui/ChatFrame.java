@@ -7,6 +7,12 @@ import javax.swing.border.EmptyBorder;
 import com.rasel.client.ClientInterface;
 import com.rasel.common.ResponseParser;
 
+// NEW: imports for subscribers and JSON parsing
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.Objects;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 /**
  * Mock main chat UI: left column = groups, right column = messages + input.
  */
@@ -23,15 +29,26 @@ public class ChatFrame extends JFrame {
 
     private final String userDisplayName;
 
+    // NEW: subscriber handles
+    private AutoCloseable groupsSub;
+    private AutoCloseable messagesSub;
+
+    // NEW: flag to control selection behavior after refresh
+    private volatile boolean selectFirstAfterRefresh = false;
+
+    // NEW: JSON mapper for message payloads
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     public ChatFrame(String userDisplayName) {
         super("Rasel • Chat");
         this.userDisplayName = userDisplayName;
         initUI();
+        subscribeToServerEvents();
         loadGroups(true);
     }
 
     private void initUI() {
-        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE); // changed to DISPOSE to cleanup subscriptions
         setMinimumSize(new Dimension(900, 580));
         setLocationRelativeTo(null);
         getContentPane().setBackground(Theme.BG);
@@ -117,76 +134,115 @@ public class ChatFrame extends JFrame {
         add(split, BorderLayout.CENTER);
 
         Theme.styleRoot(this.getContentPane());
+
+        // NEW: cleanup subscriptions on window close
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosed(WindowEvent e) {
+                cleanupSubscriptions();
+            }
+        });
+    }
+
+    // NEW: subscribe to GROUPS and MESSAGES resources
+    private void subscribeToServerEvents() {
+        ClientInterface client = GuiClient.getClient();
+        if (client == null) return;
+
+        groupsSub = client.onGroups(resp -> SwingUtilities.invokeLater(() -> handleGroupsResponse(resp)));
+        messagesSub = client.onMessages(resp -> SwingUtilities.invokeLater(() -> handleIncomingMessage(resp)));
     }
 
     private void onGroupSelected(String group) {
         if (group == null)
             return;
         headerLabel.setText("# " + group + "  —  messages");
-        // Mock: show a few placeholder messages for the selected group
+        // Clear current view; messages for this group will arrive asynchronously
         messagesModel.clear();
-        messagesModel.addElement(new ChatMessage("system", "Welcome to " + group + ". This is a mock view.", false));
-        messagesModel.addElement(new ChatMessage("alice", "Hello!", false));
-        messagesModel.addElement(new ChatMessage("bob", "Hi there.", false));
-        scrollMessagesToEnd();
+
+        // Optionally, request history if supported by protocol
+        ClientInterface client = GuiClient.getClient();
+        if (client != null) {
+            client.requestMessages(group); // no-op if not implemented
+        }
     }
 
+    // NEW: async groups loader using subscriber API
     private void loadGroups(boolean selectFirstIfNoneSelected) {
-        // Preserve current selection if possible on refresh
+        this.selectFirstAfterRefresh = selectFirstIfNoneSelected;
         final String prevSelection = groupsList.getSelectedValue();
-        setGroupsLoading(true);
+        putClientInLoadingState(true);
 
-        SwingWorker<String[], Void> worker = new SwingWorker<String[], Void>() {
-            @Override
-            protected String[] doInBackground() throws Exception {
-                ClientInterface client = GuiClient.getClient();
-                if (client == null || !client.isConnected()) {
-                    throw new IllegalStateException("Client is not connected");
-                }
-                // Send the request, then wait for the response and parse groups
-                client.requestListGroups();
-                ResponseParser resp = client.getResponse();
-                if (resp == null || !resp.isOk()) return new String[0];
-                String data = resp.getData();
-                if (data == null || data.isBlank() || data.equals("No groups available")) {
-                    return new String[0];
-                }
-                return data.split(",");
-            }
+        ClientInterface client = GuiClient.getClient();
+        if (client == null || !client.isConnected()) {
+            putClientInLoadingState(false);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Client is not connected",
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-            @Override
-            protected void done() {
-                setGroupsLoading(false);
-                try {
-                    String[] groups = get();
-                    groupsModel.clear();
-                    if (groups != null) {
-                        for (String g : groups) {
-                            if (g != null && !g.trim().isEmpty()) {
-                                groupsModel.addElement(g.trim());
-                            }
-                        }
-                    }
+        // Send request; UI will be updated when GROUPS response arrives
+        client.requestGroups();
+    }
 
-                    // Try to restore previous selection if it still exists
-                    if (prevSelection != null && groupsModel.contains(prevSelection)) {
-                        groupsList.setSelectedValue(prevSelection, true);
-                    } else if (selectFirstIfNoneSelected && groupsModel.getSize() > 0) {
-                        groupsList.setSelectedIndex(0);
-                    } else {
-                        groupsList.clearSelection();
-                        headerLabel.setText("");
-                    }
-                } catch (Exception ex) {
-                    // On failure, keep whatever is currently displayed, but notify the user
-                    JOptionPane.showMessageDialog(ChatFrame.this,
-                            "Failed to load groups: " + ex.getMessage(),
-                            "Error",
-                            JOptionPane.ERROR_MESSAGE);
+    // NEW: handle GROUPS response and update UI
+    private void handleGroupsResponse(ResponseParser resp) {
+        putClientInLoadingState(false);
+        if (resp == null || !resp.isOk()) {
+            // Keep current list; optionally show a toast/dialog
+            return;
+        }
+
+        final String prevSelection = groupsList.getSelectedValue();
+
+        String data = resp.getData();
+        String[] groups = parseGroupList(data);
+
+        groupsModel.clear();
+        if (groups != null) {
+            for (String g : groups) {
+                if (g != null && !g.trim().isEmpty()) {
+                    groupsModel.addElement(g.trim());
                 }
             }
-        };
-        worker.execute();
+        }
+
+        // Restore previous selection if possible, otherwise select first if requested
+        if (prevSelection != null && groupsModel.contains(prevSelection)) {
+            groupsList.setSelectedValue(prevSelection, true);
+        } else if (selectFirstAfterRefresh && groupsModel.getSize() > 0) {
+            groupsList.setSelectedIndex(0);
+        } else {
+            groupsList.clearSelection();
+            headerLabel.setText("");
+        }
+        // Reset the flag after using it
+        selectFirstAfterRefresh = false;
+    }
+
+    // NEW: naive parsing supporting CSV, newline-separated, or JSON array
+    private String[] parseGroupList(String data) {
+        if (data == null || data.isBlank()) return new String[0];
+        String trimmed = data.trim();
+
+        // Try JSON array: ["g1","g2"]
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                return MAPPER.readValue(trimmed, String[].class);
+            } catch (Exception ignored) {
+                // fallback to simple split below
+            }
+        }
+
+        // Fall back: split on commas or newlines
+        String[] parts = trimmed.split("[,\n]");
+        for (int i = 0; i < parts.length; i++) {
+            parts[i] = parts[i].replace("[", "").replace("]", "").trim();
+        }
+        return parts;
     }
 
     private void setGroupsLoading(boolean loading) {
@@ -196,13 +252,56 @@ public class ChatFrame extends JFrame {
         }
     }
 
+    // NEW: set loading state (wrapper to keep method naming consistent)
+    private void putClientInLoadingState(boolean loading) {
+        setGroupsLoading(loading);
+    }
+
     private void appendOwnMessage() {
         String text = messageField.getText().trim();
         if (text.isEmpty())
             return;
+        String group = groupsList.getSelectedValue();
+        if (group == null || group.isBlank()) {
+            JOptionPane.showMessageDialog(this, "Select a group first.", "Info", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
         messageField.setText("");
+
+        // Send to server
+        ClientInterface client = GuiClient.getClient();
+        if (client != null) {
+            client.sendMessage(group, text);
+        }
+
+        // Optimistic UI update (shows immediately)
         messagesModel.addElement(new ChatMessage(userDisplayName, text, true));
         scrollMessagesToEnd();
+    }
+
+    // NEW: handle incoming message payloads (JSON)
+    private void handleIncomingMessage(ResponseParser resp) {
+        if (resp == null || !resp.isOk()) return;
+        if (!resp.isJson()) return;
+
+        try {
+            String json = resp.getData();
+            IncomingMessage dto = MAPPER.readValue(json, IncomingMessage.class);
+            if (dto == null || dto.group == null) return;
+
+            String selected = groupsList.getSelectedValue();
+            if (Objects.equals(dto.group, selected)) {
+                String sender = dto.senderName != null ? dto.senderName : "unknown";
+                messagesModel.addElement(new ChatMessage(sender, dto.content != null ? dto.content : "", false));
+                scrollMessagesToEnd();
+            } else {
+                // Optionally, indicate unread for other group(s)
+                // e.g., badge the group in the list; left as an exercise
+            }
+        } catch (Exception ignored) {
+            // Ignore malformed payloads
+        }
     }
 
     private void scrollMessagesToEnd() {
@@ -237,5 +336,24 @@ public class ChatFrame extends JFrame {
                 BorderFactory.createEmptyBorder(10, 14, 10, 14)));
         b.setFocusPainted(false);
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+    }
+
+    // NEW: unsubscribe on dispose
+    private void cleanupSubscriptions() {
+        try {
+            if (groupsSub != null) groupsSub.close();
+        } catch (Exception ignored) {}
+        try {
+            if (messagesSub != null) messagesSub.close();
+        } catch (Exception ignored) {}
+    }
+
+    // NEW: Minimal DTO for message JSON payloads
+    private static final class IncomingMessage {
+        public String group;
+        public String senderId;   // optional
+        public String senderName; // preferred for display
+        public String content;
+        public String timestamp;
     }
 }
