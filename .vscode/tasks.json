@@ -1,0 +1,134 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash -lc 'set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")'",
+			"problemMatcher": [
+				"$gcc"
+			]
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "javac build Rasel",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -e; cd /home/ahmed/Collage/Java/lab/Rasel; mkdir -p bin; javac -Xlint:all -d bin $(find src -name \"*.java\")"
+			],
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		}
+	]
+}
