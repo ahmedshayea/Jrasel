@@ -229,16 +229,50 @@ DATA:<response_data>
 END_OF_RESPONSE
 ```
 
-## How to Run
+## How to Build and Run
 
-### Server
+You must have [Apache Maven](https://maven.apache.org/install.html) installed to build and run this project.
 
-To run the server, execute the `main` method in the `com.rasel.Rasel` class.
+### Building the JARs
 
-### Terminal Client
+You can build a specific fat JAR (a JAR file containing all dependencies) by activating the corresponding Maven profile. The generated JAR will be in the `target` directory.
 
-To run the terminal client, execute the `main` method in the `com.rasel.client.TerminalClient` class.
+-   **Server**:
 
-### GUI Client
+    ```bash
+    mvn package -P server
+    ```
 
-To run the GUI client, execute the `main` method in the `com.rasel.gui.Launcher` class.
+-   **GUI Client**:
+
+    ```bash
+    mvn package -P gui
+    ```
+
+-   **Terminal Client**:
+
+    ```bash
+    mvn package -P terminal
+    ```
+
+### Running the Applications
+
+Once you have built the desired JAR file, you can run it using the `java -jar` command.
+
+-   **Server**:
+
+    ```bash
+    java -jar target/jrasel-server.jar
+    ```
+
+-   **GUI Client**:
+
+    ```bash
+    java -jar target/jrasel-gui.jar
+    ```
+
+-   **Terminal Client**:
+
+    ```bash
+    java -jar target/jrasel-terminal.jar
+    ```
