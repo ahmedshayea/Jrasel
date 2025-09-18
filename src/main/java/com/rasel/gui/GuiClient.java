@@ -7,7 +7,7 @@ public class GuiClient {
     private static ClientInterface client;
 
     static {
-        client = new Client("localhost", 12345);
+        client = new Client("192.168.8.2", 12345);
         try {
             client.connect();
         } catch (Exception e) {

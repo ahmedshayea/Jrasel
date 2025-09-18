@@ -15,7 +15,9 @@ import com.rasel.common.ResponseStatus;
 import com.rasel.server.db.ChatMessage;
 import com.rasel.server.db.DatabaseManager;
 import com.rasel.server.db.Group;
+import com.rasel.server.db.GroupSerializer;
 import com.rasel.server.db.User;
+import com.rasel.server.db.UserSerializer;
 import com.rasel.server.logging.Log;
 
 /**
@@ -48,9 +50,11 @@ public class ClientHandler implements Runnable {
         this.authManager = new AuthenticationManager();
 
         try {
+
             in = new BufferedReader(
                     new InputStreamReader(clientSocket.getInputStream()));
             out = new PrintWriter(clientSocket.getOutputStream(), true);
+
             Log.debug(
                     "Initialized IO streams for client %s:%d",
                     clientSocket.getInetAddress().getHostAddress(),
@@ -175,22 +179,38 @@ public class ClientHandler implements Runnable {
      */
     void handleGetGroups(RequestParser request) {
         var groups = DatabaseManager.groupManager.getUserGruops(user);
-        // Tag resource so client.onGroups() subscribers receive it
-        var resp = ResponseBuilder.ok(groups.toString(), ResponseResource.GROUPS);
+
+        // Serialize full group objects (name, admin, members, messages if present)
+        String dataJson = new GroupSerializer(groups, false).serialize();
+
+        // Send as JSON with proper resource tag so subscribers receive it
+        var resp = ResponseBuilder.ok(dataJson, DataType.JSON, null, ResponseResource.GROUPS);
         sendResponse(resp);
         logResponse(resp);
     }
 
     /**
      * return all users in the system, send response with resource of 'users' to
-     * the client
+     * the client, if group was provided in the request, return all users in that
+     * group.
      *
      * @param request
      */
     void handleGetUsers(RequestParser request) {
-        var users = DatabaseManager.userManager.getAllUsers();
-        // Tag resource so client.onUsers() subscribers receive it
-        var resp = ResponseBuilder.ok(users.toString(), ResponseResource.USERS);
+        var groupName = request.getGroup();
+        var group = DatabaseManager.groupManager.getGroup(groupName);
+
+        java.util.List<User> users;
+        if (group == null) {
+            users = DatabaseManager.userManager.getAllUsers();
+        } else {
+            users = group.getMembers();
+        }
+
+        String data = new UserSerializer(users, false).serialize();
+
+        // Mark explicitly as JSON and tag resource
+        var resp = ResponseBuilder.ok(data, DataType.JSON, groupName, ResponseResource.USERS);
         sendResponse(resp);
         logResponse(resp);
     }
@@ -205,12 +225,11 @@ public class ClientHandler implements Runnable {
 
         if (credentials == null) {
             var resp = new ResponseBuilder(
-                "Credentials must be provided",
-                DataType.TEXT,
-                null,
-                ResponseStatus.ERROR,
-                ResponseResource.AUTH_FAILURE
-            );
+                    "Credentials must be provided",
+                    DataType.TEXT,
+                    null,
+                    ResponseStatus.ERROR,
+                    ResponseResource.AUTH_FAILURE);
             sendResponse(resp);
             logResponse(resp);
             return;
@@ -227,22 +246,20 @@ public class ClientHandler implements Runnable {
             this.user = authUser;
 
             response = new ResponseBuilder(
-                "Authentication successful",
-                DataType.TEXT,
-                null,
-                ResponseStatus.OK,
-                ResponseResource.AUTH_SUCCESS
-            );
+                    "Authentication successful",
+                    DataType.TEXT,
+                    null,
+                    ResponseStatus.OK,
+                    ResponseResource.AUTH_SUCCESS);
             Log.info("Authentication succeeded userId=%s username=%s",
                     authUser.getId(), authUser.getUsername());
         } else {
             response = new ResponseBuilder(
-                "Invalid credentials",
-                DataType.TEXT,
-                null,
-                ResponseStatus.FORBIDDEN,
-                ResponseResource.AUTH_FAILURE
-            );
+                    "Invalid credentials",
+                    DataType.TEXT,
+                    null,
+                    ResponseStatus.FORBIDDEN,
+                    ResponseResource.AUTH_FAILURE);
             Log.warn("Authentication failed username=%s", credentials.getUsername());
         }
         sendResponse(response);
@@ -269,8 +286,7 @@ public class ClientHandler implements Runnable {
                         DataType.TEXT,
                         null,
                         ResponseStatus.OK,
-                        ResponseResource.AUTH_SUCCESS
-                );
+                        ResponseResource.AUTH_SUCCESS);
                 Log.info(
                         "Signup succeeded userId=%s username=%s",
                         createdUser.getId(),
@@ -282,8 +298,7 @@ public class ClientHandler implements Runnable {
                         DataType.TEXT,
                         null,
                         ResponseStatus.ERROR,
-                        ResponseResource.AUTH_FAILURE
-                );
+                        ResponseResource.AUTH_FAILURE);
                 Log.warn(
                         "Signup failed for username=%s (unknown reason)",
                         credentials.getUsername());
@@ -299,8 +314,7 @@ public class ClientHandler implements Runnable {
                     DataType.TEXT,
                     null,
                     ResponseStatus.ERROR,
-                    ResponseResource.AUTH_FAILURE
-            );
+                    ResponseResource.AUTH_FAILURE);
         }
         sendResponse(response);
         logResponse(response);
@@ -345,9 +359,13 @@ public class ClientHandler implements Runnable {
         var response = ResponseBuilder
                 .ok(json, com.rasel.common.DataType.JSON, groupName, ResponseResource.MESSAGES);
 
-        // Broadcast to all group members
+        // Broadcast to all group members except the sender (client already displays own
+        // message optimistically)
         int delivered = 0;
         for (User member : group.getMembers()) {
+            if (this.user != null && member.getId().equals(this.user.getId())) {
+                continue; // skip sender
+            }
             ClientHandler client = connectionManager.getClientHandlerByUserId(member.getId());
             if (client != null) {
                 client.sendResponse(response);
@@ -389,9 +407,23 @@ public class ClientHandler implements Runnable {
                     "Group created name=%s by userId=%s",
                     groupIdentifier,
                     this.user != null ? this.user.getId() : "?");
+            // 1) Send a simple OK text for compatibility
             var resp = ResponseBuilder.ok("Group created successfully");
             sendResponse(resp);
             logResponse(resp);
+
+            // 2) Immediately send updated GROUPS as JSON so GUI clients refresh reliably
+            var groups = DatabaseManager.groupManager.getUserGruops(this.user);
+            String dataJson = new com.rasel.server.db.GroupSerializer(groups, false).serialize();
+            Log.info("Post-create GROUPS for user=%s count=%d jsonLen=%d",
+                    this.user != null ? this.user.getUsername() : "?",
+                    groups != null ? groups.size() : 0,
+                    dataJson != null ? dataJson.length() : 0);
+            var groupsResp = ResponseBuilder.ok(dataJson, com.rasel.common.DataType.JSON, null,
+                    com.rasel.common.ResponseResource.GROUPS);
+            sendResponse(groupsResp);
+            logResponse(groupsResp);
+            Log.info("Sent post-create GROUPS response to user=%s", this.user != null ? this.user.getUsername() : "?");
         } catch (Exception e) {
             Log.error(
                     "Failed to create group name=%s by userId=%s",
@@ -473,6 +505,28 @@ public class ClientHandler implements Runnable {
             var resp = ResponseBuilder.ok("User added successfully");
             sendResponse(resp);
             logResponse(resp);
+
+            // Push updated GROUPS to target user (now a member) and to admin (sender)
+            try {
+                var groupsForTarget = DatabaseManager.groupManager.getUserGruops(target);
+                String dataJsonTarget = new com.rasel.server.db.GroupSerializer(groupsForTarget, false).serialize();
+                var targetGroupsResp = ResponseBuilder.ok(dataJsonTarget, com.rasel.common.DataType.JSON, null,
+                        com.rasel.common.ResponseResource.GROUPS);
+                ClientHandler targetHandler = connectionManager.getClientHandlerByUserId(target.getId());
+                if (targetHandler != null) {
+                    targetHandler.sendResponse(targetGroupsResp);
+                    targetHandler.logResponse(targetGroupsResp);
+                }
+
+                var groupsForAdmin = DatabaseManager.groupManager.getUserGruops(this.user);
+                String dataJsonAdmin = new com.rasel.server.db.GroupSerializer(groupsForAdmin, false).serialize();
+                var adminGroupsResp = ResponseBuilder.ok(dataJsonAdmin, com.rasel.common.DataType.JSON, null,
+                        com.rasel.common.ResponseResource.GROUPS);
+                sendResponse(adminGroupsResp);
+                logResponse(adminGroupsResp);
+            } catch (Exception pushEx) {
+                Log.warn("Failed to push updated GROUPS after add: %s", pushEx.getMessage());
+            }
         } catch (Exception e) {
             Log.error(
                     "Failed to add user to group group=%s username=%s",

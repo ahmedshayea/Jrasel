@@ -16,7 +16,8 @@ import com.rasel.common.ResponseResource;
  * 1) connect()
  * 2) authenticate(...) or signup(...)
  * 3) send requests (requestGroups/requestUsers/sendMessage/etc.)
- * 4) subscribe to resources (onUsers/onGroups/onMessages/onAuthSuccess/onAuthFailure)
+ * 4) subscribe to resources
+ * (onUsers/onGroups/onMessages/onAuthSuccess/onAuthFailure)
  *
  * All responses are received asynchronously and dispatched to subscribers
  * based on ResponseResource. Handlers typically run on a background thread;
@@ -57,6 +58,11 @@ public interface ClientInterface {
     void authenticate(Credentials credentials);
 
     /**
+     * reset authentication state
+     */
+    void clearSession();
+
+    /**
      * Send a signup request (create account) using the provided credentials.
      * This is asynchronous; success/failure is delivered via subscriptions.
      *
@@ -87,7 +93,7 @@ public interface ClientInterface {
      * @param groupName new group identifier
      * @throws Exception if request construction or send fails
      */
-    void requestCreateGroup(String groupName) throws Exception;
+    void requestCreateGroup(String groupName);
 
     /**
      * Request the server to send groups relevant to the user.
@@ -100,6 +106,12 @@ public interface ClientInterface {
      * Responses will be published with resource=USERS.
      */
     void requestUsers();
+
+    /**
+     * Request the server to send the list of users.
+     * Responses will be published with resource=USERS.
+     */
+    void requestUsers(String groupName);
 
     /**
      * Request messages for the specified group (if supported by the protocol).

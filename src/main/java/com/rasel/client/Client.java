@@ -67,14 +67,19 @@ public class Client implements ClientInterface {
     }
 
     @Override
+    public void clearSession() {
+        authenticated = false;
+        credentials = null;
+    }
+
+    @Override
     public void signup(Credentials credentials) {
         this.credentials = credentials;
         RequestBuilder request = new RequestBuilder(
                 RequestIntent.SIGNUP,
                 credentials,
                 null,
-                null
-        );
+                null);
         sendRequest(request.getRequest());
     }
 
@@ -87,35 +92,48 @@ public class Client implements ClientInterface {
 
     @Override
     public void sendMessage(String group, String message) {
-        if (!authenticated) return;
+        if (!authenticated)
+            return;
         String request = RequestBuilder.sendMessageRequest(credentials, group, message);
         sendRequest(request);
     }
 
     @Override
-    public void requestCreateGroup(String groupName) throws Exception {
-        if (!authenticated) return;
+    public void requestCreateGroup(String groupName) {
+        if (!authenticated)
+            return;
         String req = RequestBuilder.createGroupRequest(credentials, groupName);
         sendRequest(req);
     }
 
     @Override
     public void requestGroups() {
-        if (!authenticated) return;
+        if (!authenticated)
+            return;
         String req = RequestBuilder.getGroupsRequest(credentials);
         sendRequest(req);
     }
 
     @Override
     public void requestUsers() {
-        if (!authenticated) return;
+        if (!authenticated)
+            return;
         String req = RequestBuilder.getUsersRequest(credentials);
         sendRequest(req);
     }
 
     @Override
+    public void requestUsers(String groupName) {
+        if (!authenticated)
+            return;
+        String req = RequestBuilder.getUsersRequest(credentials, groupName);
+        sendRequest(req);
+    }
+
+    @Override
     public void requestMessages(String groupName) {
-        if (!authenticated) return;
+        if (!authenticated)
+            return;
         // Implement once RequestBuilder supports it; keep non-throwing.
         // Example:
         // String req = RequestBuilder.getMessagesRequest(credentials, groupName);
@@ -125,7 +143,8 @@ public class Client implements ClientInterface {
 
     @Override
     public void requestAddUserToGroup(String groupName, String username) {
-        if (!authenticated) return;
+        if (!authenticated)
+            return;
         String req = RequestBuilder.addUserToGroupRequest(credentials, groupName, username);
         sendRequest(req);
     }
@@ -141,6 +160,35 @@ public class Client implements ClientInterface {
     @Override
     public ResponseParser getResponse() throws Exception {
         throw new UnsupportedOperationException("Synchronous getResponse() is disabled; use subscriber APIs.");
+    }
+
+    ResponseParser getResponseLegacy() throws Exception {
+        StringBuilder rb = new StringBuilder();
+        boolean ended = false;
+        String line;
+        int lineCount = 0;
+        final int MAX_LINES = 10000;
+        while ((line = in.readLine()) != null) {
+            if (line.equals("END_OF_RESPONSE")) {
+                ended = true;
+                break;
+            }
+            rb.append(line).append("\n");
+            if (++lineCount > MAX_LINES) {
+                throw new Exception("Request too large");
+            }
+        }
+
+        if (!ended) {
+            throw new IOException("Stream ended before END_OF_RESPONSE");
+        }
+
+        String payload = rb.toString();
+        if (payload.isBlank()) {
+            throw new Exception("Empty response");
+        }
+        Log.trace("Received raw request (%d chars)", payload.length());
+        return new ResponseParser(payload);
     }
 
     // Subscriptions
@@ -165,7 +213,8 @@ public class Client implements ClientInterface {
         // Update state when event arrives then forward to handler
         return responseBus.on(ResponseResource.AUTH_SUCCESS, resp -> {
             authenticated = true;
-            if (handler != null) handler.accept(resp);
+            if (handler != null)
+                handler.accept(resp);
         });
     }
 
@@ -173,7 +222,8 @@ public class Client implements ClientInterface {
     public AutoCloseable onAuthFailure(Consumer<ResponseParser> handler) {
         return responseBus.on(ResponseResource.AUTH_FAILURE, resp -> {
             authenticated = false;
-            if (handler != null) handler.accept(resp);
+            if (handler != null)
+                handler.accept(resp);
         });
     }
 
@@ -185,7 +235,8 @@ public class Client implements ClientInterface {
     // Internals
 
     public void sendRequest(String request) {
-        if (!isConnected()) return;
+        if (!isConnected())
+            return;
         out.println(request);
     }
 
@@ -210,12 +261,15 @@ public class Client implements ClientInterface {
                         break;
                     }
                     sb.append(line).append('\n');
-                    if (++lineCount > MAX_LINES) throw new IOException("Response too large");
+                    if (++lineCount > MAX_LINES)
+                        throw new IOException("Response too large");
                 }
-                if (!ended) break; // socket probably closed
+                if (!ended)
+                    break; // socket probably closed
 
                 String payload = sb.toString();
-                if (payload.isBlank()) continue;
+                if (payload.isBlank())
+                    continue;
 
                 // Prime keys to avoid stale values
                 String primed = "STATUS:\nRESOURCE:\nDATA_TYPE:\nGROUP:\nDATA:\n" + payload;

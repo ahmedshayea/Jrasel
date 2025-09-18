@@ -121,9 +121,14 @@ public class LoginFrame extends JFrame {
         statusRow.setOpaque(false);
         GridBagConstraints sc = new GridBagConstraints();
         sc.insets = new Insets(4, 0, 0, 0);
-        sc.gridx = 0; sc.gridy = 0; sc.anchor = GridBagConstraints.WEST;
+        sc.gridx = 0;
+        sc.gridy = 0;
+        sc.anchor = GridBagConstraints.WEST;
         statusRow.add(progress, sc);
-        sc.gridx = 1; sc.weightx = 1.0; sc.fill = GridBagConstraints.HORIZONTAL; sc.insets = new Insets(4, 8, 0, 0);
+        sc.gridx = 1;
+        sc.weightx = 1.0;
+        sc.fill = GridBagConstraints.HORIZONTAL;
+        sc.insets = new Insets(4, 8, 0, 0);
         statusRow.add(statusLabel, sc);
 
         c.gridy++;
@@ -161,7 +166,8 @@ public class LoginFrame extends JFrame {
         onAuthStart(false);
 
         subs[0] = client.onAuthSuccess(resp -> {
-            if (!done.compareAndSet(false, true)) return; // first event only
+            if (!done.compareAndSet(false, true))
+                return; // first event only
             closeSubsQuietly(subs);
             SwingUtilities.invokeLater(() -> {
                 showSuccess("Signed in successfully.");
@@ -170,7 +176,8 @@ public class LoginFrame extends JFrame {
         });
 
         subs[1] = client.onAuthFailure(resp -> {
-            if (!done.compareAndSet(false, true)) return;
+            if (!done.compareAndSet(false, true))
+                return;
             closeSubsQuietly(subs);
             String msg = (resp != null && resp.getData() != null && !resp.getData().isBlank())
                     ? resp.getData()
@@ -184,7 +191,8 @@ public class LoginFrame extends JFrame {
         client.authenticate(credentials);
     }
 
-    // NEW: create account using the same fields (fire-and-forget signup + auth subscribers)
+    // NEW: create account using the same fields (fire-and-forget signup + auth
+    // subscribers)
     private void createAccount() {
         String username = usernameField.getText().trim();
         String password = new String(passwordField.getPassword());
@@ -200,7 +208,8 @@ public class LoginFrame extends JFrame {
         onAuthStart(true);
 
         subs[0] = client.onAuthSuccess(resp -> {
-            if (!done.compareAndSet(false, true)) return;
+            if (!done.compareAndSet(false, true))
+                return;
             closeSubsQuietly(subs);
             SwingUtilities.invokeLater(() -> {
                 showSuccess("Account created. You are now signed in.");
@@ -209,7 +218,8 @@ public class LoginFrame extends JFrame {
         });
 
         subs[1] = client.onAuthFailure(resp -> {
-            if (!done.compareAndSet(false, true)) return;
+            if (!done.compareAndSet(false, true))
+                return;
             closeSubsQuietly(subs);
             String msg = (resp != null && resp.getData() != null && !resp.getData().isBlank())
                     ? resp.getData()
@@ -273,9 +283,14 @@ public class LoginFrame extends JFrame {
     }
 
     private static void closeSubsQuietly(AutoCloseable[] subs) {
-        if (subs == null) return;
+        if (subs == null)
+            return;
         for (AutoCloseable s : subs) {
-            try { if (s != null) s.close(); } catch (Exception ignored) {}
+            try {
+                if (s != null)
+                    s.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 

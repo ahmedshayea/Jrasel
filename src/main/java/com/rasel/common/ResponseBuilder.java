@@ -39,85 +39,85 @@ public class ResponseBuilder implements Response {
 
     // All possible constructor combinations
     public ResponseBuilder() {
-    this("", DataType.TEXT, null, ResponseStatus.OK, null);
+        this("", DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data) {
-    this(data, DataType.TEXT, null, ResponseStatus.OK, null);
+        this(data, DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data, DataType dataType) {
-    this(data, dataType, null, ResponseStatus.OK, null);
+        this(data, dataType, null, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data, DataType dataType, String group) {
-    this(data, dataType, group, ResponseStatus.OK, null);
+        this(data, dataType, group, ResponseStatus.OK, null);
     }
 
     public ResponseBuilder(String data, DataType dataType, String group, ResponseStatus status) {
-    this(data, dataType, group, status, null);
+        this(data, dataType, group, status, null);
     }
 
     // no extra constructor; the above serves as the main one
 
     // Static factories for OK
     public static ResponseBuilder ok(String data) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, null);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, null);
     }
 
     public static ResponseBuilder ok(String data, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, resource);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.OK, resource);
     }
 
     public static ResponseBuilder ok(String data, String group) {
-    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, null);
+        return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, null);
     }
 
     public static ResponseBuilder ok(String data, String group, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, resource);
+        return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.OK, resource);
     }
 
     public static ResponseBuilder ok(String data, DataType dataType, String group, ResponseResource resource) {
-    return new ResponseBuilder(data, dataType, group, ResponseStatus.OK, resource);
+        return new ResponseBuilder(data, dataType, group, ResponseStatus.OK, resource);
     }
 
     // Static factories for FORBIDDEN
     public static ResponseBuilder forbidden(String data) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, null);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, null);
     }
 
     public static ResponseBuilder forbidden(String data, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, resource);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.FORBIDDEN, resource);
     }
 
     public static ResponseBuilder forbidden(String data, String group, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.FORBIDDEN, resource);
+        return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.FORBIDDEN, resource);
     }
 
     // Static factories for ERROR
     public static ResponseBuilder error(String data) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, null);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, null);
     }
 
     public static ResponseBuilder error(String data, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, resource);
+        return new ResponseBuilder(data, DataType.TEXT, null, ResponseStatus.ERROR, resource);
     }
 
     public static ResponseBuilder error(String data, String group, ResponseResource resource) {
-    return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.ERROR, resource);
+        return new ResponseBuilder(data, DataType.TEXT, group, ResponseStatus.ERROR, resource);
     }
 
     // Convenience JSON factories
     public static ResponseBuilder okJson(String json) {
-    return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.OK, null);
+        return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.OK, null);
     }
 
     public static ResponseBuilder okJson(String json, String group) {
-    return new ResponseBuilder(json, DataType.JSON, group, ResponseStatus.OK, null);
+        return new ResponseBuilder(json, DataType.JSON, group, ResponseStatus.OK, null);
     }
 
     public static ResponseBuilder errorJson(String json) {
-    return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.ERROR, null);
+        return new ResponseBuilder(json, DataType.JSON, null, ResponseStatus.ERROR, null);
     }
 
     // Fluent builder-style API (non-breaking, returns this)
@@ -150,7 +150,8 @@ public class ResponseBuilder implements Response {
         return this;
     }
 
-    // Sender fields removed from protocol; include sender info inside DATA when needed (e.g., message payload JSON).
+    // Sender fields removed from protocol; include sender info inside DATA when
+    // needed (e.g., message payload JSON).
 
     /** No-op for fluency; returns the same instance. */
     public ResponseBuilder build() {
@@ -165,6 +166,8 @@ public class ResponseBuilder implements Response {
         sb.append(RM.DATA_TYPE.name()).append(":").append(dataType.name()).append("\n");
         sb.append(RM.GROUP.name()).append(":").append(group != null ? group : "").append("\n");
         sb.append(RM.DATA.name()).append(":").append(data).append("\n");
+        // TODO: add "DATA_LENGTH" in bytes, and calculate it automatically without
+        // effecting this class usage.
         return sb.append(END_OF_RESPONSE).toString().trim();
     }
 

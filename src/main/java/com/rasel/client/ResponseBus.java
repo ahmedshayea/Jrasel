@@ -36,12 +36,15 @@ public class ResponseBus {
     }
 
     public void publish(ResponseParser resp) {
-        // Queue delivery
-        if (resp.getResource() != null) {
-            queues.computeIfAbsent(resp.getResource(), k -> new LinkedBlockingQueue<>()).offer(resp);
+        // Ignore untagged responses (RESOURCE missing)
+        final com.rasel.common.ResponseResource resource = resp != null ? resp.getResource() : null;
+        if (resource == null) {
+            return;
         }
+        // Queue delivery
+        queues.computeIfAbsent(resource, k -> new LinkedBlockingQueue<>()).offer(resp);
         // Callback delivery
-        var ls = listeners.get(resp.getResource());
+        var ls = listeners.get(resource);
         if (ls != null) {
             for (var l : ls) {
                 callbackExecutor.execute(() -> l.accept(resp));
