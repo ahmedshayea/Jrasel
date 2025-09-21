@@ -1,9 +1,72 @@
-# Jrasel
+# Rasel ( راسل )
+Rasel is a clinet-server real-time chat application built on top of **rasel** protocol, 
+which is a custom, TCP-based protocol for real-time communication, this repo contains
+both server and client implementations as well as a dedicated Terminal Based client
+and a GUI client built with Swing.
 
-Jrasel is a client-server chat application built in Java. It features a custom, TCP-based protocol for real-time communication. The project includes a server that handles multiple clients, authentication, and group messaging, along with two client implementations: a terminal-based client and a graphical user interface (GUI) client built with Swing.
+## Motivation
+Why should I spend months learning complex frameworks and protocols to build a simple real-time chat application?
+
+I was trying to build a simple chat application and I found that I have to learn **Enterprise** level frameworks and protocols like **WebSocket**, just to build my simple chat app?
+
+That seemed like using a sword to cut a paper!
+
+So I decided to build my own real-time TCP-based protocol and a simple chat application on top of it.
+
+## Running Applications
+
+> [!IMPORTANT]
+> This project uses Java 21 and Maven as build tool and dependency manager, make sure to have maven installed on your system, if it is not yet installed, you can follow the officila instructions [here](https://maven.apache.org/install.html).
+
+This project hosts three main applications: 
+1.  **Server**: The server application that handles client connections, authentication, and message routing.
+2.  **Terminal Client**: A command-line interface for users to interact with the chat server.
+3.  **GUI Client**: A graphical user interface built with Swing for a more user-friendly experience.
+
+to run any of these applications, first you need to clone the repository: 
+
+```bash
+git clone https://github.com/ahmedshayea/Rasel.git
+cd Rasel 
+```
+
+Then you can build the desired application using Maven, each application has its own Maven profile, available profiles are: `server`, `gui`, `terminal`
+
+To build the server application, run:
+
+```bash
+mvn package -P server
+```
+This will generate a fat JAR file located at `target/rasel-server.jar` 
+
+use the following command to run the jar file: 
+
+```bash
+java -jar target/rasel-server.jar
+```
+
+Other applications can be build the same way, just replace the profile name with the desired one: 
+
+```bash
+mvn package -P gui # for GUI client
+mvn package -P terminal # for Terminal client 
+```
+
+To run the GUI client, use:
+
+```bash
+java -jar target/rasel-gui.jar
+```
+To run the Terminal client, use:
+
+```bash
+java -jar target/rasel-terminal.jar
+```
+
+> [!IMPORTANT]
+> Make sure the server is running before starting any client application, gui client and terminal client will fail to start if the server is not running.
 
 ## Features
-
 - **Client-Server Architecture**: A robust server that can handle multiple concurrent clients.
 - **Custom Protocol**: A simple, text-based protocol for client-server communication.
 - **Authentication**: Secure user authentication and signup.

@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.rasel</groupId>
-    <artifactId>jrasel</artifactId>
+    <artifactId>rasel</artifactId>
     <version>1.0.0</version>
 
     <properties>
@@ -29,7 +29,7 @@
                         <artifactId>maven-assembly-plugin</artifactId>
                         <version>3.3.0</version>
                         <configuration>
-                            <finalName>jrasel-server</finalName>
+                            <finalName>rasel-server</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>com.rasel.Rasel</mainClass>
@@ -61,7 +61,7 @@
                         <artifactId>maven-assembly-plugin</artifactId>
                         <version>3.3.0</version>
                         <configuration>
-                            <finalName>jrasel-gui</finalName>
+                            <finalName>rasel-gui</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>com.rasel.gui.Launcher</mainClass>
@@ -93,7 +93,7 @@
                         <artifactId>maven-assembly-plugin</artifactId>
                         <version>3.3.0</version>
                         <configuration>
-                            <finalName>jrasel-terminal</finalName>
+                            <finalName>rasel-terminal</finalName>
                             <archive>
                                 <manifest>
                                     <mainClass>com.rasel.client.TerminalClient</mainClass>
