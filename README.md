@@ -66,6 +66,17 @@ java -jar target/rasel-terminal.jar
 > [!IMPORTANT]
 > Make sure the server is running before starting any client application, gui client and terminal client will fail to start if the server is not running.
 
+## Features
+these are some of the features in this project:
+- **Client-Server Architecture**: A robust server that can handle multiple concurrent clients.
+- **Rasel Protocol**: A simple, text-based , real-time protocol.
+- **Authentication**: Login and signup functionality.
+- **Group Chat**: Create groups and add members to groups.
+- **Multiple Clients**:
+    - **Terminal Client**: A CLI interface for interacting with the chat server.
+    - **GUI Client**: A user-friendly graphical interface built with Swing.
+- **In-Memory Data Store**: A simple in-memory storage system with database ready architecutre.
+
 ## Class Diagram
 
 ```mermaid
@@ -258,64 +269,92 @@ classDiagram
 
 ```
 
-## Features
-- **Client-Server Architecture**: A robust server that can handle multiple concurrent clients.
-- **Custom Protocol**: A simple, text-based protocol for client-server communication.
-- **Authentication**: Secure user authentication and signup.
-- **Group Chat**: Users can create, join, and send messages to groups.
-- **Multiple Clients**:
-    - **Terminal Client**: A command-line interface for interacting with the chat server.
-    - **GUI Client**: A user-friendly graphical interface built with Swing.
-- **In-Memory Data Store**: The server uses an in-memory data store for users and groups, with a database-ready architecture.
+## Usage
+In this section, I will provide an overview of how the project is strucutred, how to use it , and potentionally how to contribute to it if you want to.
 
-## Project Structure
 
-The project is organized into the following main packages:
+### Project Structure
+
+The project is splitted into the following main packages:
 
 -   `com.rasel.server`: Contains the server-side logic, including connection management, authentication, and request handling.
--   `com.rasel.client`: Contains the client-side logic, including the base `Client` class and the `TerminalClient`.
+-   `com.rasel.client`: Contains the client-side logic, including the base `Client` class ( which is the main client interface to interact with the rasel protocol) and the `TerminalClient`.
 -   `com.rasel.gui`: Contains the Swing-based GUI client, including the `Launcher`, `LoginFrame`, and `ChatFrame`.
 -   `com.rasel.common`: Contains classes shared between the client and server, such as the `Request` and `Response` builders and parsers.
 -   `com.rasel.server.db`: Contains the in-memory database implementation for managing users and groups.
 
-## How It Works
+### How It Works
 
-### Server
+#### Server
 
 1.  The `Server` class initializes a `ServerSocket` and listens for incoming client connections.
 2.  For each new connection, a `ClientHandler` thread is created to handle communication with that client.
-3.  The `ClientHandler` reads requests from the client, parses them using `RequestParser`, and processes them based on the `RequestIntent`.
+3.  The `ClientHandler` constantly reads requests from the client, parses them using `RequestParser`, and processes them based on the `INTENT`.
 4.  The `AuthenticationManager` handles user authentication and signup, interacting with the `DatabaseManager`.
 5.  The `ConnectionManager` keeps track of all connected clients and their authentication status.
-6.  The `DatabaseManager`, along with `UserManager` and `GroupManager`, manages the application's data in memory.
+6.  The `DatabaseManager`, along with `UserManager` ,`GroupManager`, and `ChatMessagesManager`, they manages application data, 
+    currenltly in-memory but can be extended to use a persistent database without changing the classes interface implementation.
 
-### Client
+#### Client
 
-1.  The `Client` class establishes a connection to the server and provides methods for sending requests and receiving responses.
-2.  The `TerminalClient` provides a command-line interface for users to interact with the chat service.
+1.  The `Client` class establishes a connection to the server and provides methods for sending various requests types and subscribes to various server messages, 
+    it uses the `ResponseBus` to manage event-driven responses form the server, allow client to subscribe to specific response types ( response resources to be more accurate ).
+2.  The `TerminalClient` provides a command-line interface for users to interact with the chat service, it uses the `Client` class to send and receive messages.
 3.  The `GuiClient` and the other classes in the `com.rasel.gui` package provide a graphical user interface for a more user-friendly experience.
 4.  Both clients use the `RequestBuilder` to construct requests and the `ResponseParser` to interpret responses from the server.
 
-## Protocol
+## Rasel Protocol Specifications
 
-The communication between the client and server is based on a custom, text-based protocol. Requests and responses are formatted as a series of key-value pairs, terminated by a special end-of-message marker.
+The specifications are still in development, this is the current version of the protocl:
 
 ### Request Format
 
+A request is just a plain text string with the following format:
+
 ```
-INTENT:<intent>
-CREDENTIALS:<username>:<password>
-GROUP:<group_name>
-DATA:<message>
+INTENT:<intent_name>
+[CREDENTIALS:<username>:<password>]
+[GROUP:<group_name>]
+[DATA:<data>]
 END_OF_REQUEST
 ```
 
-### Response Format
+-   `INTENT`: Specifies the purpose of the request. It's a mandatory field.
+-   `CREDENTIALS`: Optional field for authentication. It includes the username and password separated by a colon.
+-   `GROUP`: Optional field to specify a group identifier.
+-   `DATA`: actual data of the request, think of it as the http body.
+-   `END_OF_REQUEST`: Marks the end of the request.
+
+### Request Intents
+
+**INTENT** is a mandatory field, it is used by the server to determine how to handle the request, 
+these are the available intents:
+
+-   `AUTH`: Authenticate a user, performs a login.
+-   `SEND`: Send a message to a group, group must be provided in the request.
+-   `CREATE`: Create a new group.
+-   `GET_GROUPS`: Get a list of all groups.
+-   `GET_USERS`: Get a list of all users or users in a specific group, depends on the precentation of GROUP field, if you provided GROUP identifier, list of users in that group will be returned.
+-   `ADD`: Add a user to a group, must provide the GROUP field.
+
+#### Response Format
 
 ```
 STATUS:<status>
+RESOURCE:<resource_name>
 DATA_TYPE:<type>
 GROUP:<group_name>
 DATA:<response_data>
 END_OF_RESPONSE
 ```
+
+
+## Limitations and Future Work
+- **In-memory Storage:** ...
+- **Encryption:**...
+
+### Future Enhancements
+- **Protocol Improvements:**...
+- **Persistent Storage:**...
+- **Enhanced GUI:**...
+- **Additional Features:**...
