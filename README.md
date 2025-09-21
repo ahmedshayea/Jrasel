@@ -66,22 +66,14 @@ java -jar target/rasel-terminal.jar
 > [!IMPORTANT]
 > Make sure the server is running before starting any client application, gui client and terminal client will fail to start if the server is not running.
 
-## Features
-- **Client-Server Architecture**: A robust server that can handle multiple concurrent clients.
-- **Custom Protocol**: A simple, text-based protocol for client-server communication.
-- **Authentication**: Secure user authentication and signup.
-- **Group Chat**: Users can create, join, and send messages to groups.
-- **Multiple Clients**:
-    - **Terminal Client**: A command-line interface for interacting with the chat server.
-    - **GUI Client**: A user-friendly graphical interface built with Swing.
-- **In-Memory Data Store**: The server uses an in-memory data store for users and groups, with a database-ready architecture.
-
 ## Class Diagram
-
-The following diagram illustrates the high-level architecture of the Jrasel project:
 
 ```mermaid
 classDiagram
+    class Rasel {
+        +main(String[] args)
+    }
+
     class Server {
         -ServerSocket socket
         -ConnectionManager connectionManager
@@ -96,53 +88,22 @@ classDiagram
         -BufferedReader in
         -AuthenticationManager authManager
         +run()
-        +handleRequest(RequestParser)
+        -handleRequest(RequestParser request)
     }
 
     class ConnectionManager {
         -ServerSocket serverSocket
         -List<ClientHandler> clients
         -Map<String, ClientHandler> authenticatedClients
-        +addClient(ClientHandler)
-        +removeClient(ClientHandler)
-        +addAuthenticatedClient(String, ClientHandler)
-        +getClientHandlerByUserId(String)
+        +addClient(ClientHandler client)
+        +removeClient(ClientHandler client)
+        +addAuthenticatedClient(String userId, ClientHandler client)
+        +getClientHandlerByUserId(String userId)
     }
 
     class AuthenticationManager {
-        -DatabaseManager db
-        +authenticate(String, String)
-        +signup(String, String)
-    }
-
-    class DatabaseManager {
-        +UserManager userManager
-        +GroupManager groupManager
-    }
-
-    class UserManager {
-        -ArrayList<User> users
-        +createUser(String, String)
-        +getUser(String)
-    }
-
-    class GroupManager {
-        -ArrayList<Group> groups
-        +createGroup(String, User)
-        +getGroup(String)
-        +addMember(String, User)
-    }
-
-    class User {
-        -String id
-        -String username
-        -String password
-    }
-
-    class Group {
-        -String name
-        -ArrayList<User> members
-        -User admin
+        +authenticate(String username, String password) User
+        +signup(String username, String password) User
     }
 
     class Client {
@@ -152,38 +113,37 @@ classDiagram
         -PrintWriter out
         -BufferedReader in
         -Credentials credentials
+        -ResponseBus responseBus
         +connect()
         +disconnect()
-        +authenticate(Credentials)
-        +signup(Credentials)
-        +sendMessage(String, String)
+        +authenticate(Credentials credentials)
+        +sendMessage(String group, String message)
+    }
+
+    class ClientInterface {
+        <<interface>>
+        +connect()
+        +disconnect()
+        +authenticate(Credentials credentials)
+        +sendMessage(String group, String message)
     }
 
     class TerminalClient {
-        -Client client
+        -ClientInterface client
+        -Scanner scanner
         +start()
+        -handleUserInput()
     }
 
     class GuiClient {
         -ClientInterface client
-        +getClient()
+        +getClient() ClientInterface
     }
 
-    class Launcher {
-        +main(String[])
-    }
-
-    class LoginFrame {
-        -JTextField usernameField
-        -JPasswordField passwordField
-        +signIn()
-    }
-
-    class ChatFrame {
-        -DefaultListModel<String> groupsModel
-        -DefaultListModel<ChatMessage> messagesModel
-        -JTextField messageField
-        +loadGroups()
+    class ResponseBus {
+        -Map<ResponseResource, CopyOnWriteArrayList<Consumer<ResponseParser>>> listeners
+        +on(ResponseResource resource, Consumer<ResponseParser> handler) AutoCloseable
+        +publish(ResponseParser resp)
     }
 
     class RequestBuilder {
@@ -191,7 +151,16 @@ classDiagram
         -Credentials credentials
         -String group
         -String data
-        +getRequest()
+        +getRequest() String
+    }
+
+    class ResponseBuilder {
+        -ResponseStatus status
+        -ResponseResource resource
+        -String group
+        -DataType dataType
+        -String data
+        +getResponseString() String
     }
 
     class RequestParser {
@@ -199,46 +168,105 @@ classDiagram
         -Credentials credentials
         -String group
         -String data
-        +getIntent()
-    }
-
-    class ResponseBuilder {
-        -ResponseStatus status
-        -String group
-        -DataType dataType
-        -String data
-        +getResponseString()
+        +getIntent() RequestIntent
     }
 
     class ResponseParser {
         -ResponseStatus status
         -DataType dataType
+        -ResponseResource resource
         -String group
         -String data
-        +getStatus()
+        +getStatus() ResponseStatus
     }
 
+    class DatabaseManager {
+        +UserManager userManager
+        +GroupManager groupManager
+        +ChatMessageManager chatMessageManager
+    }
+
+    class UserManager {
+        -ArrayList<User> users
+        +createUser(String username, String password) User
+        +getUser(String username) User
+    }
+
+    class GroupManager {
+        -ArrayList<Group> groups
+        +createGroup(String name, User admin) Group
+        +getGroup(String name) Group
+    }
+
+    class ChatMessageManager {
+        -ArrayList<ChatMessage> messages
+        +addMessage(ChatMessage message)
+        +getMessagesForGroup(Group group) ArrayList<ChatMessage>
+    }
+
+    class User {
+        -String username
+        -String password
+        +checkPassword(String password) Boolean
+    }
+
+    class Group {
+        -String name
+        -ArrayList<User> members
+        -User admin
+        +addMember(User user)
+        +isMember(User user) Boolean
+    }
+
+    class ChatMessage {
+        -Group group
+        -User sender
+        -String content
+        -String timestamp
+    }
+
+    Rasel --> Server
     Server --> ConnectionManager
     Server --> ClientHandler
     ClientHandler --> ConnectionManager
     ClientHandler --> AuthenticationManager
     ClientHandler --> RequestParser
     ClientHandler --> ResponseBuilder
+    ClientHandler --> DatabaseManager
+    ConnectionManager --> ClientHandler
     AuthenticationManager --> DatabaseManager
-    DatabaseManager --> UserManager
-    DatabaseManager --> GroupManager
-    UserManager --> User
-    GroupManager --> Group
-    Group --> User
+    Client --> ClientInterface
+    Client --> ResponseBus
     Client --> RequestBuilder
     Client --> ResponseParser
-    TerminalClient --> Client
-    GuiClient --> Client
-    Launcher --> GuiClient
-    Launcher --> LoginFrame
+    TerminalClient --> ClientInterface
+    GuiClient --> ClientInterface
+    GuiClient --> LoginFrame
     LoginFrame --> ChatFrame
     ChatFrame --> GuiClient
+    DatabaseManager --> UserManager
+    DatabaseManager --> GroupManager
+    DatabaseManager --> ChatMessageManager
+    UserManager --> User
+    GroupManager --> Group
+    GroupManager --> User
+
+    Group --> User
+    ChatMessageManager --> ChatMessage
+    ChatMessage --> Group
+    ChatMessage --> User
+
 ```
+
+## Features
+- **Client-Server Architecture**: A robust server that can handle multiple concurrent clients.
+- **Custom Protocol**: A simple, text-based protocol for client-server communication.
+- **Authentication**: Secure user authentication and signup.
+- **Group Chat**: Users can create, join, and send messages to groups.
+- **Multiple Clients**:
+    - **Terminal Client**: A command-line interface for interacting with the chat server.
+    - **GUI Client**: A user-friendly graphical interface built with Swing.
+- **In-Memory Data Store**: The server uses an in-memory data store for users and groups, with a database-ready architecture.
 
 ## Project Structure
 
@@ -291,51 +319,3 @@ GROUP:<group_name>
 DATA:<response_data>
 END_OF_RESPONSE
 ```
-
-## How to Build and Run
-
-You must have [Apache Maven](https://maven.apache.org/install.html) installed to build and run this project.
-
-### Building the JARs
-
-You can build a specific fat JAR (a JAR file containing all dependencies) by activating the corresponding Maven profile. The generated JAR will be in the `target` directory.
-
--   **Server**:
-
-    ```bash
-    mvn package -P server
-    ```
-
--   **GUI Client**:
-
-    ```bash
-    mvn package -P gui
-    ```
-
--   **Terminal Client**:
-
-    ```bash
-    mvn package -P terminal
-    ```
-
-### Running the Applications
-
-Once you have built the desired JAR file, you can run it using the `java -jar` command.
-
--   **Server**:
-
-    ```bash
-    java -jar target/jrasel-server.jar
-    ```
-
--   **GUI Client**:
-
-    ```bash
-    java -jar target/jrasel-gui.jar
-    ```
-
--   **Terminal Client**:
-
-    ```bash
-    java -jar target/jrasel-terminal.jar
-    ```
